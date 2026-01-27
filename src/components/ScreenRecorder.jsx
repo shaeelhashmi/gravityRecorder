@@ -8,36 +8,67 @@ const ScreenRecorder = () => {
     const [isRecording, setIsRecording] = useState(false);
     const [status, setStatus] = useState('idle');
     const [screenStream, setScreenStream] = useState(null);
+    const [audioStream, setAudioStream] = useState(null);
 
     const mediaRecorderRef = useRef(null);
 
-    const startScreenStream = async () => {
-        try {
-            setStatus('initializing');
-            console.log('Requesting raw screen stream...');
-            const stream = await mediaManager.getScreenStream();
+    useEffect(() => {
+        return () => {
+            stopAll();
+        };
+    }, []);
 
+    const toggleScreen = async () => {
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            setScreenStream(null);
+            if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+            if (!audioStream) setStatus('idle');
+            return;
+        }
+
+        try {
+            console.log('Requesting screen stream...');
+            const stream = await mediaManager.getScreenStream();
             setScreenStream(stream);
             if (videoPreviewRef.current) {
                 videoPreviewRef.current.srcObject = stream;
             }
 
             stream.getVideoTracks()[0].onended = () => {
-                stopAll();
+                setScreenStream(null);
             };
 
             setStatus('ready');
         } catch (err) {
             console.error('Error starting screen stream:', err);
-            setStatus('error');
             alert(`Could not acquire screen: ${err.message}`);
+        }
+    };
+
+    const toggleMic = async () => {
+        if (audioStream) {
+            audioStream.getTracks().forEach(track => track.stop());
+            setAudioStream(null);
+            if (!screenStream) setStatus('idle');
+            return;
+        }
+
+        try {
+            console.log('Requesting mic stream...');
+            const stream = await mediaManager.getAudioStream();
+            setAudioStream(stream);
+            setStatus('ready');
+        } catch (err) {
+            console.error('Error starting mic stream:', err);
+            alert(`Could not acquire microphone: ${err.message}`);
         }
     };
 
     const getSupportedMimeType = () => {
         const types = [
-            'video/webm;codecs=vp9',
-            'video/webm;codecs=vp8',
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
             'video/webm',
             'video/mp4'
         ];
@@ -51,13 +82,27 @@ const ScreenRecorder = () => {
 
     const startRecording = async () => {
         try {
-            if (!screenStream) return;
+            if (!screenStream) {
+                alert('Please enable the screen first.');
+                return;
+            }
 
-            console.log('Starting direct MediaStream recording (No Canvas overhead)...');
+            console.log('Starting hardware-direct recording (mixing tracks)...');
+
+            // Create a combined stream for recording
+            const combinedStream = new MediaStream();
+
+            // Add video track from screen
+            screenStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
+
+            // Add audio track from microphone if available
+            if (audioStream) {
+                audioStream.getAudioTracks().forEach(track => combinedStream.addTrack(track));
+                console.log('Microphone audio track added to recording');
+            }
+
             const mimeType = getSupportedMimeType();
-
-            // Record the STREAM directly, not the canvas
-            const mediaRecorder = new MediaRecorder(screenStream, { mimeType });
+            const mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
             mediaRecorderRef.current = mediaRecorder;
 
             mediaRecorder.ondataavailable = (event) => {
@@ -74,7 +119,7 @@ const ScreenRecorder = () => {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `direct-recording-${Date.now()}.webm`;
+                a.download = `recording-${Date.now()}.webm`;
                 a.click();
                 await storageManager.clearStorage();
             };
@@ -97,55 +142,74 @@ const ScreenRecorder = () => {
     };
 
     const stopAll = () => {
-        if (screenStream) {
-            screenStream.getTracks().forEach(track => track.stop());
-        }
+        if (screenStream) screenStream.getTracks().forEach(track => track.stop());
+        if (audioStream) audioStream.getTracks().forEach(track => track.stop());
         setScreenStream(null);
+        setAudioStream(null);
         setStatus('idle');
     };
 
     return (
         <div className="recorder-container">
-            <h2 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>Performance Mode: Direct Stream</h2>
+            <h2 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>Stability Phase: Direct Capture + Audio</h2>
 
             <div className="preview-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <video
-                    ref={videoPreviewRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
+                {screenStream ? (
+                    <video
+                        ref={videoPreviewRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                ) : (
+                    <div style={{ color: 'var(--text-muted)' }}>Screen share inactive</div>
+                )}
+
                 {status === 'recording' && (
                     <div className="status-badge status-recording">
                         <span className="status-dot"></span>
-                        Recording Directly (0 Canvas Overhead)
+                        Recording {audioStream ? '(Mic On)' : '(Mic Off)'}
                     </div>
                 )}
             </div>
 
             <div className="controls-panel">
-                {status === 'idle' ? (
-                    <button className="btn btn-primary" onClick={startScreenStream}>
-                        1. Select Screen
+                <div style={{ display: 'flex', gap: '0.5rem', borderRight: '1px solid var(--glass-border)', paddingRight: '0.5rem', marginRight: '0.5rem' }}>
+                    <button
+                        className={`btn ${screenStream ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={toggleScreen}
+                        disabled={isRecording}
+                    >
+                        {screenStream ? 'Disable Screen' : 'Enable Screen'}
                     </button>
-                ) : (
-                    <>
-                        <button
-                            className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
-                            onClick={isRecording ? stopRecording : startRecording}
-                        >
-                            {isRecording ? 'Stop Recording' : '2. Start Recording'}
-                        </button>
-                        <button className="btn btn-outline" onClick={stopAll}>
-                            Reset
-                        </button>
-                    </>
+                    <button
+                        className={`btn ${audioStream ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={toggleMic}
+                        disabled={isRecording}
+                    >
+                        {audioStream ? 'Disable Mic' : 'Enable Mic'}
+                    </button>
+                </div>
+
+                {screenStream && (
+                    <button
+                        className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={isRecording ? stopRecording : startRecording}
+                    >
+                        {isRecording ? 'Stop Recording' : 'Start Recording'}
+                    </button>
+                )}
+
+                {(screenStream || audioStream) && (
+                    <button className="btn btn-outline" onClick={stopAll} disabled={isRecording}>
+                        Reset All
+                    </button>
                 )}
             </div>
 
             <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '1rem', textAlign: 'center' }}>
-                Status: {status.toUpperCase()} | Bypassing Canvas for maximum framerate.
+                Status: {status.toUpperCase()} | 0-Lag Hardware Mix Mode
             </div>
         </div>
     );
