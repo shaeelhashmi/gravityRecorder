@@ -12,6 +12,7 @@ const ScreenRecorder = () => {
     const [screenStream, setScreenStream] = useState(null);
     const [audioStream, setAudioStream] = useState(null);
     const [cameraStream, setCameraStream] = useState(null);
+    const [webcamShape, setWebcamShape] = useState('circle'); // circle, rounded-rect, square
 
     const mediaRecorderRef = useRef(null);
     const drawTimerRef = useRef(null);
@@ -139,7 +140,13 @@ const ScreenRecorder = () => {
 
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
+                if (webcamShape === 'circle') {
+                    ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
+                } else if (webcamShape === 'rounded-rect') {
+                    ctx.roundRect(bx, by, bubbleSize, bubbleSize, 32);
+                } else {
+                    ctx.rect(bx, by, bubbleSize, bubbleSize);
+                }
                 ctx.closePath();
                 ctx.clip();
 
@@ -166,6 +173,16 @@ const ScreenRecorder = () => {
 
                 ctx.strokeStyle = '#646cff';
                 ctx.lineWidth = 3;
+
+                // Draw border path
+                ctx.beginPath();
+                if (webcamShape === 'circle') {
+                    ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
+                } else if (webcamShape === 'rounded-rect') {
+                    ctx.roundRect(bx, by, bubbleSize, bubbleSize, 32);
+                } else {
+                    ctx.rect(bx, by, bubbleSize, bubbleSize);
+                }
                 ctx.stroke();
             }
 
@@ -186,7 +203,7 @@ const ScreenRecorder = () => {
         } else {
             if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
         }
-    }, [cameraStream, screenStream]);
+    }, [cameraStream, screenStream, webcamShape]);
 
     const startRecording = async () => {
         try {
@@ -289,6 +306,17 @@ const ScreenRecorder = () => {
                         REC {cameraStream ? 'BUBBLE' : 'DIRECT'}
                     </div>
                 )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', margin: '1rem 0', padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Frame Shape:</span>
+                {['circle', 'rounded-rect', 'square'].map(s => (
+                    <button key={s} onClick={() => setWebcamShape(s)}
+                        className={`btn btn-outline ${webcamShape === s ? 'active' : ''}`}
+                        style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem' }}>
+                        {s === 'rounded-rect' ? 'Rounded' : s.charAt(0).toUpperCase() + s.slice(1)}
+                    </button>
+                ))}
             </div>
 
             <div className="controls-panel">
