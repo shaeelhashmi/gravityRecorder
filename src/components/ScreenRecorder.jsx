@@ -3,16 +3,31 @@ import { mediaManager } from '../utils/MediaManager';
 import { storageManager } from '../utils/StorageManager';
 
 const ScreenRecorder = () => {
-    const videoPreviewRef = useRef(null);
+    const canvasRef = useRef(null);
+    const screenVideoRef = useRef(null);
+    const cameraVideoRef = useRef(null);
 
     const [isRecording, setIsRecording] = useState(false);
     const [status, setStatus] = useState('idle');
     const [screenStream, setScreenStream] = useState(null);
     const [audioStream, setAudioStream] = useState(null);
+    const [cameraStream, setCameraStream] = useState(null);
 
     const mediaRecorderRef = useRef(null);
+    const drawTimerRef = useRef(null);
 
+    // Initialize hidden video elements
     useEffect(() => {
+        screenVideoRef.current = document.createElement('video');
+        screenVideoRef.current.muted = true;
+        screenVideoRef.current.autoplay = true;
+        screenVideoRef.current.playsInline = true;
+
+        cameraVideoRef.current = document.createElement('video');
+        cameraVideoRef.current.muted = true;
+        cameraVideoRef.current.autoplay = true;
+        cameraVideoRef.current.playsInline = true;
+
         return () => {
             stopAll();
         };
@@ -22,21 +37,21 @@ const ScreenRecorder = () => {
         if (screenStream) {
             screenStream.getTracks().forEach(track => track.stop());
             setScreenStream(null);
-            if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
-            if (!audioStream) setStatus('idle');
+            screenVideoRef.current.srcObject = null;
             return;
         }
 
         try {
-            console.log('Requesting screen stream...');
             const stream = await mediaManager.getScreenStream();
             setScreenStream(stream);
-            if (videoPreviewRef.current) {
-                videoPreviewRef.current.srcObject = stream;
-            }
+            screenVideoRef.current.srcObject = stream;
+
+            // Explicitly play to ensure readyState progresses
+            await screenVideoRef.current.play().catch(e => console.warn('Screen video play delayed:', e));
 
             stream.getVideoTracks()[0].onended = () => {
                 setScreenStream(null);
+                screenVideoRef.current.srcObject = null;
             };
 
             setStatus('ready');
@@ -50,12 +65,10 @@ const ScreenRecorder = () => {
         if (audioStream) {
             audioStream.getTracks().forEach(track => track.stop());
             setAudioStream(null);
-            if (!screenStream) setStatus('idle');
             return;
         }
 
         try {
-            console.log('Requesting mic stream...');
             const stream = await mediaManager.getAudioStream();
             setAudioStream(stream);
             setStatus('ready');
@@ -65,62 +78,163 @@ const ScreenRecorder = () => {
         }
     };
 
-    const getSupportedMimeType = () => {
-        const types = [
-            'video/webm;codecs=vp9,opus',
-            'video/webm;codecs=vp8,opus',
-            'video/webm',
-            'video/mp4'
-        ];
-        for (const type of types) {
-            if (MediaRecorder.isTypeSupported(type)) {
-                return type;
-            }
+    const toggleCamera = async () => {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            setCameraStream(null);
+            cameraVideoRef.current.srcObject = null;
+            return;
         }
-        return '';
+
+        try {
+            const stream = await mediaManager.getCameraStream();
+            setCameraStream(stream);
+            cameraVideoRef.current.srcObject = stream;
+
+            // Explicitly play
+            await cameraVideoRef.current.play().catch(e => console.warn('Camera video play delayed:', e));
+
+            setStatus('ready');
+        } catch (err) {
+            console.error('Error starting camera stream:', err);
+            alert(`Could not acquire camera: ${err.message}`);
+        }
     };
 
-    const startRecording = async () => {
-        try {
-            if (!screenStream) {
-                alert('Please enable the screen first.');
+    const drawCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        const draw = () => {
+            if (!screenStream && !cameraStream) {
+                if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
                 return;
             }
 
-            console.log('Starting hardware-direct recording (mixing tracks)...');
-
-            // Create a combined stream for recording
-            const combinedStream = new MediaStream();
-
-            // Add video track from screen
-            screenStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
-
-            // Add audio track from microphone if available
-            if (audioStream) {
-                audioStream.getAudioTracks().forEach(track => combinedStream.addTrack(track));
-                console.log('Microphone audio track added to recording');
+            // Sync canvas size to screen if possible
+            if (screenStream && screenVideoRef.current.readyState >= 2) {
+                if (canvas.width !== screenVideoRef.current.videoWidth || canvas.height !== screenVideoRef.current.videoHeight) {
+                    canvas.width = screenVideoRef.current.videoWidth || 1280;
+                    canvas.height = screenVideoRef.current.videoHeight || 720;
+                }
             }
 
-            const mimeType = getSupportedMimeType();
-            const mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw Screen (Background)
+            if (screenStream && screenVideoRef.current.readyState >= 2) {
+                ctx.drawImage(screenVideoRef.current, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // 2. Draw Camera Bubble
+            if (cameraStream && cameraVideoRef.current.readyState >= 2) {
+                const bubbleSize = Math.min(canvas.width, canvas.height) * 0.25;
+                const margin = 20;
+                const bx = margin;
+                const by = canvas.height - bubbleSize - margin;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.clip();
+
+                // Aspect ratio correction for bubble
+                const vWidth = cameraVideoRef.current.videoWidth;
+                const vHeight = cameraVideoRef.current.videoHeight;
+                const vAspect = vWidth / vHeight;
+
+                let dw, dh, dx, dy;
+                if (vAspect > 1) {
+                    dw = bubbleSize * vAspect;
+                    dh = bubbleSize;
+                    dx = bx - (dw - bubbleSize) / 2;
+                    dy = by;
+                } else {
+                    dw = bubbleSize;
+                    dh = bubbleSize / vAspect;
+                    dx = bx;
+                    dy = by - (dh - bubbleSize) / 2;
+                }
+
+                ctx.drawImage(cameraVideoRef.current, dx, dy, dw, dh);
+                ctx.restore();
+
+                ctx.strokeStyle = '#646cff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            // Continue loop if active
+            if (cameraStream || screenStream) {
+                drawTimerRef.current = setTimeout(draw, 1000 / 30);
+            }
+        };
+
+        if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
+        draw();
+    };
+
+    // Trigger canvas loop when sources change
+    useEffect(() => {
+        if (cameraStream || screenStream) {
+            drawCanvas();
+        } else {
+            if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
+        }
+    }, [cameraStream, screenStream]);
+
+    const startRecording = async () => {
+        try {
+            if (!screenStream && !cameraStream) {
+                alert('Enable Screen or Camera first');
+                return;
+            }
+
+            console.log('Finalizing stream for MediaRecorder...');
+            const tracks = [];
+
+            // Case A: Webcam is active (requires canvas for bubble)
+            if (cameraStream) {
+                const canvasStream = canvasRef.current.captureStream(30);
+                tracks.push(...canvasStream.getVideoTracks());
+            }
+            // Case B: Screen only (Direct mode for better performance)
+            else if (screenStream) {
+                tracks.push(...screenStream.getVideoTracks());
+            }
+
+            // Add Audio track if available
+            if (audioStream) {
+                tracks.push(...audioStream.getAudioTracks());
+            }
+
+            const recordingStream = new MediaStream(tracks);
+
+            const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+            const mimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+            const mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
             mediaRecorderRef.current = mediaRecorder;
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data && event.data.size > 0) {
-                    storageManager.saveChunk(event.data);
-                }
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) storageManager.saveChunk(e.data);
             };
 
             mediaRecorder.onstop = async () => {
                 const chunks = await storageManager.getAllChunks();
-                if (chunks.length === 0) return;
-
-                const blob = new Blob(chunks, { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `recording-${Date.now()}.webm`;
-                a.click();
+                if (chunks.length > 0) {
+                    const blob = new Blob(chunks, { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `recording-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+                    a.click();
+                }
                 await storageManager.clearStorage();
             };
 
@@ -128,88 +242,83 @@ const ScreenRecorder = () => {
             setIsRecording(true);
             setStatus('recording');
         } catch (err) {
-            console.error('Recording failed:', err);
+            console.error('Recording start failed:', err);
             setStatus('error');
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.stop();
-        }
+        if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
         setIsRecording(false);
         setStatus('ready');
     };
 
     const stopAll = () => {
-        if (screenStream) screenStream.getTracks().forEach(track => track.stop());
-        if (audioStream) audioStream.getTracks().forEach(track => track.stop());
+        if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+
+        [screenStream, cameraStream, audioStream].forEach(s => {
+            if (s) s.getTracks().forEach(t => t.stop());
+        });
+
         setScreenStream(null);
+        setCameraStream(null);
         setAudioStream(null);
         setStatus('idle');
     };
 
     return (
         <div className="recorder-container">
-            <h2 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>Stability Phase: Direct Capture + Audio</h2>
+            <h2 style={{ color: 'var(--primary)' }}>Stability Phase: Direct + Bubble (Debug)</h2>
 
-            <div className="preview-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {screenStream ? (
-                    <video
-                        ref={videoPreviewRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    />
-                ) : (
-                    <div style={{ color: 'var(--text-muted)' }}>Screen share inactive</div>
+            <div className="preview-wrapper">
+                <canvas
+                    ref={canvasRef}
+                    width={1280}
+                    height={720}
+                    className="preview-canvas"
+                    style={{ display: (cameraStream || screenStream) ? 'block' : 'none' }}
+                />
+                {!cameraStream && !screenStream && (
+                    <div className="preview-placeholder">Sources Inactive</div>
                 )}
 
                 {status === 'recording' && (
                     <div className="status-badge status-recording">
                         <span className="status-dot"></span>
-                        Recording {audioStream ? '(Mic On)' : '(Mic Off)'}
+                        REC {cameraStream ? 'BUBBLE' : 'DIRECT'}
                     </div>
                 )}
             </div>
 
             <div className="controls-panel">
-                <div style={{ display: 'flex', gap: '0.5rem', borderRight: '1px solid var(--glass-border)', paddingRight: '0.5rem', marginRight: '0.5rem' }}>
-                    <button
-                        className={`btn ${screenStream ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={toggleScreen}
-                        disabled={isRecording}
-                    >
-                        {screenStream ? 'Disable Screen' : 'Enable Screen'}
+                <div style={{ display: 'flex', gap: '0.5rem', marginRight: '1rem' }}>
+                    <button className={`btn ${screenStream ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={toggleScreen} disabled={isRecording}>
+                        {screenStream ? 'Screen Off' : 'Screen On'}
                     </button>
-                    <button
-                        className={`btn ${audioStream ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={toggleMic}
-                        disabled={isRecording}
-                    >
-                        {audioStream ? 'Disable Mic' : 'Enable Mic'}
+                    <button className={`btn ${cameraStream ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={toggleCamera} disabled={isRecording}>
+                        {cameraStream ? 'Cam Off' : 'Cam On'}
+                    </button>
+                    <button className={`btn ${audioStream ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={toggleMic} disabled={isRecording}>
+                        {audioStream ? 'Mic Off' : 'Mic On'}
                     </button>
                 </div>
 
-                {screenStream && (
-                    <button
-                        className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={isRecording ? stopRecording : startRecording}
-                    >
-                        {isRecording ? 'Stop Recording' : 'Start Recording'}
+                {(screenStream || cameraStream) && (
+                    <button className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
+                        onClick={isRecording ? stopRecording : startRecording}>
+                        {isRecording ? 'Stop' : 'Start Recording'}
                     </button>
                 )}
 
-                {(screenStream || audioStream) && (
-                    <button className="btn btn-outline" onClick={stopAll} disabled={isRecording}>
-                        Reset All
-                    </button>
-                )}
+                <button className="btn btn-outline" onClick={stopAll}>Reset</button>
             </div>
 
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '1rem', textAlign: 'center' }}>
-                Status: {status.toUpperCase()} | 0-Lag Hardware Mix Mode
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '1rem' }}>
+                Mode: {cameraStream ? 'Canvas (Optimized)' : 'Direct (Zero Lag)'}
             </div>
         </div>
     );
