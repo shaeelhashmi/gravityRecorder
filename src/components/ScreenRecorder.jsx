@@ -27,6 +27,11 @@ const ScreenRecorder = () => {
     const [toast, setToast] = useState(null);
     const [highlightedFile, setHighlightedFile] = useState(null);
 
+    // Google Drive Sync State
+    const [googleToken, setGoogleToken] = useState(null);
+    const [cloudRegistry, setCloudRegistry] = useState({}); // signature -> { driveId, shareLink }
+    const [uploadProgress, setUploadProgress] = useState({}); // filename -> percentage
+
     // Position State (using Ref for 0-lag updates)
     const webcamPos = useRef({ x: 20, y: 410 }); // Default Bottom-Left (approx)
     const isDragging = useRef(false);
@@ -425,6 +430,130 @@ const ScreenRecorder = () => {
         }
     };
 
+    // --- Google Drive Sync & Metadata Logic ---
+
+    const getFileSignature = (file) => {
+        return `${file.size}_${file.lastModified}`;
+    };
+
+    const loadCloudMetadata = async (dirHandle) => {
+        try {
+            const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
+            const metaHandle = await assetsHandle.getFileHandle('metadata.json', { create: true });
+            const file = await metaHandle.getFile();
+            const text = await file.text();
+            if (text) {
+                setCloudRegistry(JSON.parse(text));
+            }
+        } catch (err) {
+            console.warn('Could not load metadata:', err);
+        }
+    };
+
+    const saveCloudMetadata = async (newMeta) => {
+        if (!directoryHandle) return;
+        try {
+            const assetsHandle = await directoryHandle.getDirectoryHandle('.recorder_assets', { create: true });
+            const metaHandle = await assetsHandle.getFileHandle('metadata.json', { create: true });
+            const writable = await metaHandle.createWritable();
+            await writable.write(JSON.stringify(newMeta));
+            await writable.close();
+            setCloudRegistry(newMeta);
+        } catch (err) {
+            console.error('Metadata save failed:', err);
+        }
+    };
+
+    const handleGoogleAuth = (onSuccess) => {
+        if (googleToken) return onSuccess(googleToken);
+
+        const client = window.google.accounts.oauth2.initTokenClient({
+            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/drive.file',
+            callback: (response) => {
+                if (response.access_token) {
+                    setGoogleToken(response.access_token);
+                    onSuccess(response.access_token);
+                }
+            },
+        });
+        client.requestAccessToken();
+    };
+
+    const uploadToDrive = async (fileHandle) => {
+        handleGoogleAuth(async (token) => {
+            const file = await fileHandle.getFile();
+            const signature = getFileSignature(file);
+            const fileName = file.name;
+
+            setUploadProgress(prev => ({ ...prev, [fileName]: 0 }));
+
+            try {
+                // 1. Create File Metadata
+                const metadata = {
+                    name: fileName,
+                    mimeType: file.type || 'video/webm',
+                };
+
+                // 2. Initiate Resumable Upload
+                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json; charset=UTF-8',
+                    },
+                    body: JSON.stringify(metadata),
+                });
+
+                if (!response.ok) throw new Error('Failed to initiate upload');
+                const uploadUrl = response.headers.get('Location');
+
+                // 3. Upload Content
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: file,
+                });
+
+                if (!uploadResponse.ok) throw new Error('Upload failed');
+                const driveFile = await uploadResponse.json();
+
+                // 4. Set Permissions (Make Public)
+                await fetch(`https://www.googleapis.com/drive/v3/files/${driveFile.id}/permissions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        role: 'reader',
+                        type: 'anyone',
+                    }),
+                });
+
+                // 5. Get Share Link
+                const fileInfoResp = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFile.id}?fields=webViewLink`, {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                const { webViewLink } = await fileInfoResp.json();
+
+                // 6. Update Registry
+                const newMeta = { ...cloudRegistry, [signature]: { driveId: driveFile.id, shareLink: webViewLink } };
+                await saveCloudMetadata(newMeta);
+
+                showToast('Cloud Sync Success', `${fileName} is ready to share!`, 'success');
+            } catch (err) {
+                console.error('Upload failed:', err);
+                showToast('Cloud Sync Failed', 'Check your connection', 'error');
+            } finally {
+                setUploadProgress(prev => {
+                    const next = { ...prev };
+                    delete next[fileName];
+                    return next;
+                });
+            }
+        });
+    };
+
     // Load handle from storage on mount
     useEffect(() => {
         const loadHandle = async () => {
@@ -467,6 +596,9 @@ const ScreenRecorder = () => {
     const syncLibrary = async (handle = directoryHandle) => {
         if (!handle) return;
 
+        // Load Cloud Mapping Registry
+        await loadCloudMetadata(handle);
+
         // Ensure we have permission
         const permission = await handle.queryPermission({ mode: 'readwrite' });
         if (permission !== 'granted') {
@@ -484,7 +616,8 @@ const ScreenRecorder = () => {
                         handle: entry,
                         size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
                         date: new Date(file.lastModified).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
-                        timestamp: file.lastModified
+                        timestamp: file.lastModified,
+                        signature: getFileSignature(file)
                     });
                 }
             }
@@ -775,7 +908,27 @@ const ScreenRecorder = () => {
                                                 <>
                                                     <div className="video-title-row">
                                                         <span className="video-title">{file.name}</span>
-                                                        <button className="btn-rename" onClick={e => startRename(e, file)} title="Rename">✎</button>
+                                                        <div className="video-actions">
+                                                            {uploadProgress[file.name] !== undefined ? (
+                                                                <span className="upload-loader" title="Uploading...">⏳</span>
+                                                            ) : cloudRegistry[file.signature] ? (
+                                                                <button
+                                                                    className="btn-cloud active"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        window.open(cloudRegistry[file.signature].shareLink, '_blank');
+                                                                    }}
+                                                                    title="Open Share Link"
+                                                                >🔗</button>
+                                                            ) : (
+                                                                <button
+                                                                    className="btn-cloud"
+                                                                    onClick={(e) => { e.stopPropagation(); uploadToDrive(file.handle); }}
+                                                                    title="Upload to Google Drive"
+                                                                >☁️</button>
+                                                            )}
+                                                            <button className="btn-rename" onClick={e => startRename(e, file)} title="Rename">✎</button>
+                                                        </div>
                                                     </div>
                                                     <span className="video-meta">{file.date} • {file.size}</span>
                                                 </>
