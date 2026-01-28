@@ -23,6 +23,8 @@ const ScreenRecorder = () => {
     const [selectedVideoUrl, setSelectedVideoUrl] = useState(null);
     const [editingFileName, setEditingFileName] = useState(null); // name of file being renamed
     const [newName, setNewName] = useState('');
+    const [toast, setToast] = useState(null);
+    const [highlightedFile, setHighlightedFile] = useState(null);
 
     // Position State (using Ref for 0-lag updates)
     const webcamPos = useRef({ x: 20, y: 410 }); // Default Bottom-Left (approx)
@@ -314,13 +316,20 @@ const ScreenRecorder = () => {
                             await writable.write(blob);
                             await writable.close();
                             syncLibrary(directoryHandle); // Refresh
+
+                            // Trigger success signals
+                            showToast(`Saved to ${directoryHandle.name}`, fileName, 'success');
+                            setHighlightedFile(fileName);
+                            setTimeout(() => setHighlightedFile(null), 5000); // Clear highlight after 5s
                         } catch (err) {
                             console.error('Direct save failed:', err);
                             // Fallback to manual download if direct save fails
                             triggerDownload(blob, fileName);
+                            showToast('Direct save failed', 'Download triggered as fallback', 'error');
                         }
                     } else {
                         triggerDownload(blob, fileName);
+                        showToast('Recording Saved', 'Check your downloads folder', 'success');
                     }
                 }
                 await storageManager.clearStorage();
@@ -341,6 +350,11 @@ const ScreenRecorder = () => {
         a.href = url;
         a.download = fileName;
         a.click();
+    };
+
+    const showToast = (title, message, type = 'info') => {
+        setToast({ title, message, type });
+        setTimeout(() => setToast(null), 4000);
     };
 
     // --- Video Library Logic ---
@@ -638,7 +652,9 @@ const ScreenRecorder = () => {
                             <div className="empty-state">No recordings found in this folder.</div>
                         ) : (
                             libraryFiles.map(file => (
-                                <div key={file.name} className="video-card" onClick={() => playVideo(file.handle)}>
+                                <div key={file.name}
+                                    className={`video-card ${highlightedFile === file.name ? 'highlight-success' : ''}`}
+                                    onClick={() => playVideo(file.handle)}>
                                     <div className="video-thumb">
                                         <span style={{ fontSize: '1.5rem' }}>▶</span>
                                     </div>
@@ -685,6 +701,19 @@ const ScreenRecorder = () => {
                             autoPlay
                             style={{ width: '100%', display: 'block' }}
                         />
+                    </div>
+                </div>
+            )}
+
+            {/* Toast Notifications */}
+            {toast && (
+                <div className="toast-container">
+                    <div className={`toast ${toast.type}`}>
+                        <div className="toast-content">
+                            <span className="toast-title">{toast.title}</span>
+                            <span className="toast-message">{toast.message}</span>
+                        </div>
+                        <button style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }} onClick={() => setToast(null)}>✕</button>
                     </div>
                 </div>
             )}
