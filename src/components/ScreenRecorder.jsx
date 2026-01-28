@@ -21,6 +21,7 @@ const ScreenRecorder = () => {
     const [isHandleAuthorized, setIsHandleAuthorized] = useState(false);
     const [libraryFiles, setLibraryFiles] = useState([]);
     const [selectedVideoUrl, setSelectedVideoUrl] = useState(null);
+    const [thumbnailMap, setThumbnailMap] = useState({}); // name -> blobUrl
     const [editingFileName, setEditingFileName] = useState(null); // name of file being renamed
     const [newName, setNewName] = useState('');
     const [toast, setToast] = useState(null);
@@ -317,6 +318,9 @@ const ScreenRecorder = () => {
                             await writable.close();
                             syncLibrary(directoryHandle); // Refresh
 
+                            // Generate Thumbnail after save
+                            generateThumbnail(blob, fileName, directoryHandle);
+
                             // Trigger success signals
                             showToast(`Saved to ${directoryHandle.name}`, fileName, 'success');
                             setHighlightedFile(fileName);
@@ -357,7 +361,69 @@ const ScreenRecorder = () => {
         setTimeout(() => setToast(null), 4000);
     };
 
-    // --- Video Library Logic ---
+    // --- Video Library & Thumbnail Logic ---
+
+    const generateThumbnail = async (videoBlob, videoName, dirHandle) => {
+        const video = document.createElement('video');
+        video.src = URL.createObjectURL(videoBlob);
+        video.currentTime = 1; // Jump to 1s
+
+        return new Promise((resolve) => {
+            video.onloadeddata = async () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 320;
+                canvas.height = 180;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                canvas.toBlob(async (thumbBlob) => {
+                    try {
+                        const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
+                        const thumbName = videoName.replace(/\.[^/.]+$/, "") + ".jpg";
+                        const thumbFileHandle = await assetsHandle.getFileHandle(thumbName, { create: true });
+                        const writable = await thumbFileHandle.createWritable();
+                        await writable.write(thumbBlob);
+                        await writable.close();
+
+                        // Update local map for instant display
+                        const url = URL.createObjectURL(thumbBlob);
+                        setThumbnailMap(prev => ({ ...prev, [videoName]: url }));
+                    } catch (err) {
+                        console.error('Thumbnail save failed:', err);
+                    }
+                    URL.revokeObjectURL(video.src);
+                    resolve();
+                }, 'image/jpeg', 0.7);
+            };
+        });
+    };
+
+    const getThumbnailUrl = async (videoName, videoHandle, dirHandle) => {
+        // 1. Check if already in RAM
+        if (thumbnailMap[videoName]) return thumbnailMap[videoName];
+
+        try {
+            const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
+            const thumbName = videoName.replace(/\.[^/.]+$/, "") + ".jpg";
+
+            try {
+                // 2. Try to load from disk sidecar
+                const thumbFileHandle = await assetsHandle.getFileHandle(thumbName);
+                const file = await thumbFileHandle.getFile();
+                const url = URL.createObjectURL(file);
+                setThumbnailMap(prev => ({ ...prev, [videoName]: url }));
+                return url;
+            } catch {
+                // 3. Generate on-the-fly if missing
+                const videoFile = await videoHandle.getFile();
+                await generateThumbnail(videoFile, videoName, dirHandle);
+                return thumbnailMap[videoName];
+            }
+        } catch (err) {
+            console.warn('Thumbnail engine error:', err);
+            return null;
+        }
+    };
 
     // Load handle from storage on mount
     useEffect(() => {
@@ -465,6 +531,28 @@ const ScreenRecorder = () => {
             }
 
             await fileHandle.move(finalName);
+
+            // Rename thumbnail sidecar if exists
+            try {
+                const assetsHandle = await directoryHandle.getDirectoryHandle('.recorder_assets');
+                const oldThumbName = fileHandle.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                const newThumbName = finalName.replace(/\.[^/.]+$/, "") + ".jpg";
+                const oldThumbHandle = await assetsHandle.getFileHandle(oldThumbName);
+                await oldThumbHandle.move(newThumbName);
+
+                // Update local map
+                setThumbnailMap(prev => {
+                    const next = { ...prev };
+                    if (next[fileHandle.name]) {
+                        next[finalName] = next[fileHandle.name];
+                        delete next[fileHandle.name];
+                    }
+                    return next;
+                });
+            } catch (err) {
+                console.warn('Thumbnail rename skipped (might not exist):', err);
+            }
+
             setEditingFileName(null);
             syncLibrary();
         } catch (err) {
@@ -651,40 +739,51 @@ const ScreenRecorder = () => {
                         {libraryFiles.length === 0 ? (
                             <div className="empty-state">No recordings found in this folder.</div>
                         ) : (
-                            libraryFiles.map(file => (
-                                <div key={file.name}
-                                    className={`video-card ${highlightedFile === file.name ? 'highlight-success' : ''}`}
-                                    onClick={() => playVideo(file.handle)}>
-                                    <div className="video-thumb">
-                                        <span style={{ fontSize: '1.5rem' }}>▶</span>
-                                    </div>
-                                    <div className="video-info">
-                                        {editingFileName === file.name ? (
-                                            <div onClick={e => e.stopPropagation()}>
-                                                <input
-                                                    autoFocus
-                                                    className="rename-input"
-                                                    value={newName}
-                                                    onChange={e => setNewName(e.target.value)}
-                                                    onKeyDown={e => e.key === 'Enter' && handleRename(e, file.handle)}
-                                                />
-                                                <div className="rename-actions">
-                                                    <button className="btn-small active" onClick={e => handleRename(e, file.handle)}>Save</button>
-                                                    <button className="btn-small" onClick={() => setEditingFileName(null)}>Cancel</button>
+                            libraryFiles.map(file => {
+                                // Effect to load thumbnail if not present
+                                if (!thumbnailMap[file.name]) {
+                                    getThumbnailUrl(file.name, file.handle, directoryHandle);
+                                }
+
+                                return (
+                                    <div key={file.name}
+                                        className={`video-card ${highlightedFile === file.name ? 'highlight-success' : ''}`}
+                                        onClick={() => playVideo(file.handle)}>
+                                        <div className="video-thumb">
+                                            {thumbnailMap[file.name] ? (
+                                                <img src={thumbnailMap[file.name]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
+                                            ) : (
+                                                <span style={{ fontSize: '1.5rem' }}>▶</span>
+                                            )}
+                                        </div>
+                                        <div className="video-info">
+                                            {editingFileName === file.name ? (
+                                                <div onClick={e => e.stopPropagation()}>
+                                                    <input
+                                                        autoFocus
+                                                        className="rename-input"
+                                                        value={newName}
+                                                        onChange={e => setNewName(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && handleRename(e, file.handle)}
+                                                    />
+                                                    <div className="rename-actions">
+                                                        <button className="btn-small active" onClick={e => handleRename(e, file.handle)}>Save</button>
+                                                        <button className="btn-small" onClick={() => setEditingFileName(null)}>Cancel</button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="video-title-row">
-                                                    <span className="video-title">{file.name}</span>
-                                                    <button className="btn-rename" onClick={e => startRename(e, file)} title="Rename">✎</button>
-                                                </div>
-                                                <span className="video-meta">{file.date} • {file.size}</span>
-                                            </>
-                                        )}
+                                            ) : (
+                                                <>
+                                                    <div className="video-title-row">
+                                                        <span className="video-title">{file.name}</span>
+                                                        <button className="btn-rename" onClick={e => startRename(e, file)} title="Rename">✎</button>
+                                                    </div>
+                                                    <span className="video-meta">{file.date} • {file.size}</span>
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 )}
