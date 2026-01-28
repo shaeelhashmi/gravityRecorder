@@ -15,6 +15,11 @@ const ScreenRecorder = () => {
     const [webcamShape, setWebcamShape] = useState('circle'); // circle, rounded-rect, square
     const [webcamScale, setWebcamScale] = useState(0.40); // Default to Medium (0.40)
 
+    // Position State (using Ref for 0-lag updates)
+    const webcamPos = useRef({ x: 20, y: 410 }); // Default Bottom-Left (approx)
+    const isDragging = useRef(false);
+    const dragOffset = useRef({ x: 0, y: 0 });
+
     const mediaRecorderRef = useRef(null);
     const drawTimerRef = useRef(null);
 
@@ -106,7 +111,7 @@ const ScreenRecorder = () => {
     const drawCanvas = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
 
         const draw = () => {
             if (!screenStream && !cameraStream) {
@@ -114,13 +119,17 @@ const ScreenRecorder = () => {
                 return;
             }
 
-            // Sync canvas size to screen if possible
-            if (screenStream && screenVideoRef.current.readyState >= 2) {
-                if (canvas.width !== screenVideoRef.current.videoWidth || canvas.height !== screenVideoRef.current.videoHeight) {
-                    canvas.width = screenVideoRef.current.videoWidth || 1280;
-                    canvas.height = screenVideoRef.current.videoHeight || 720;
-                }
-            }
+            // Fixed internal resolution for stability
+            canvas.width = 1280;
+            canvas.height = 720;
+
+            const bubbleSize = canvas.height * webcamScale;
+
+            // Constrain position to canvas bounds
+            webcamPos.current.x = Math.max(0, Math.min(1280 - bubbleSize, webcamPos.current.x));
+            webcamPos.current.y = Math.max(0, Math.min(720 - bubbleSize, webcamPos.current.y));
+
+            const { x, y } = webcamPos.current;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -134,10 +143,9 @@ const ScreenRecorder = () => {
 
             // 2. Draw Camera Bubble
             if (cameraStream && cameraVideoRef.current.readyState >= 2) {
-                const bubbleSize = Math.min(canvas.width, canvas.height) * webcamScale;
-                const margin = 20;
-                const bx = margin;
-                const by = canvas.height - bubbleSize - margin;
+                const bubbleSize = canvas.height * webcamScale;
+                const bx = x;
+                const by = y;
 
                 ctx.save();
                 ctx.beginPath();
@@ -205,6 +213,46 @@ const ScreenRecorder = () => {
             if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
         }
     }, [cameraStream, screenStream, webcamShape, webcamScale]);
+
+    // Drag and Drop Logic (Lag-Free)
+    const getCanvasMousePos = (e) => {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = 1280 / rect.width;
+        const scaleY = 720 / rect.height;
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    };
+
+    const handleMouseDown = (e) => {
+        const pos = getCanvasMousePos(e);
+        const bubbleSize = 720 * webcamScale;
+        const { x, y } = webcamPos.current;
+
+        // Check if click is inside bubble
+        if (pos.x >= x && pos.x <= x + bubbleSize && pos.y >= y && pos.y <= y + bubbleSize) {
+            isDragging.current = true;
+            dragOffset.current = {
+                x: pos.x - x,
+                y: pos.y - y
+            };
+        }
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDragging.current) return;
+        const pos = getCanvasMousePos(e);
+        webcamPos.current = {
+            x: pos.x - dragOffset.current.x,
+            y: pos.y - dragOffset.current.y
+        };
+    };
+
+    const handleMouseUp = () => {
+        isDragging.current = false;
+    };
 
     const startRecording = async () => {
         try {
@@ -295,7 +343,14 @@ const ScreenRecorder = () => {
                     width={1280}
                     height={720}
                     className="preview-canvas"
-                    style={{ display: (cameraStream || screenStream) ? 'block' : 'none' }}
+                    style={{
+                        display: (cameraStream || screenStream) ? 'block' : 'none',
+                        cursor: isRecording ? 'default' : 'move'
+                    }}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
                 />
                 {!cameraStream && !screenStream && (
                     <div className="preview-placeholder">Sources Inactive</div>
