@@ -15,6 +15,15 @@ const ScreenRecorder = () => {
     const [webcamShape, setWebcamShape] = useState('circle'); // circle, rounded-rect, square
     const [webcamScale, setWebcamScale] = useState(0.40); // Default to Medium (0.40)
 
+    // Video Library & Sync State
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [directoryHandle, setDirectoryHandle] = useState(null);
+    const [isHandleAuthorized, setIsHandleAuthorized] = useState(false);
+    const [libraryFiles, setLibraryFiles] = useState([]);
+    const [selectedVideoUrl, setSelectedVideoUrl] = useState(null);
+    const [editingFileName, setEditingFileName] = useState(null); // name of file being renamed
+    const [newName, setNewName] = useState('');
+
     // Position State (using Ref for 0-lag updates)
     const webcamPos = useRef({ x: 20, y: 410 }); // Default Bottom-Left (approx)
     const isDragging = useRef(false);
@@ -295,11 +304,24 @@ const ScreenRecorder = () => {
                 const chunks = await storageManager.getAllChunks();
                 if (chunks.length > 0) {
                     const blob = new Blob(chunks, { type: mimeType });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `recording-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
-                    a.click();
+                    const fileName = `recording-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+
+                    // If folder is connected, save directly
+                    if (directoryHandle) {
+                        try {
+                            const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                            syncLibrary(directoryHandle); // Refresh
+                        } catch (err) {
+                            console.error('Direct save failed:', err);
+                            // Fallback to manual download if direct save fails
+                            triggerDownload(blob, fileName);
+                        }
+                    } else {
+                        triggerDownload(blob, fileName);
+                    }
                 }
                 await storageManager.clearStorage();
             };
@@ -312,6 +334,138 @@ const ScreenRecorder = () => {
             setStatus('error');
         }
     };
+
+    const triggerDownload = (blob, fileName) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+    };
+
+    // --- Video Library Logic ---
+
+    // Load handle from storage on mount
+    useEffect(() => {
+        const loadHandle = async () => {
+            const savedHandle = await storageManager.getSetting('workspace_handle');
+            if (savedHandle) {
+                setDirectoryHandle(savedHandle);
+                // Check if we still have permission (browsers usually reset this on refresh)
+                const state = await savedHandle.queryPermission({ mode: 'readwrite' });
+                setIsHandleAuthorized(state === 'granted');
+            }
+        };
+        loadHandle();
+    }, []);
+
+    const connectFolder = async () => {
+        try {
+            const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            setDirectoryHandle(handle);
+            setIsHandleAuthorized(true);
+            await storageManager.setSetting('workspace_handle', handle);
+            await syncLibrary(handle);
+        } catch (err) {
+            console.warn('Folder connection skipped:', err);
+        }
+    };
+
+    const resumeSync = async () => {
+        if (!directoryHandle) return;
+        try {
+            const state = await directoryHandle.requestPermission({ mode: 'readwrite' });
+            if (state === 'granted') {
+                setIsHandleAuthorized(true);
+                await syncLibrary(directoryHandle);
+            }
+        } catch (err) {
+            console.error('Permission request failed:', err);
+        }
+    };
+
+    const syncLibrary = async (handle = directoryHandle) => {
+        if (!handle) return;
+
+        // Ensure we have permission
+        const permission = await handle.queryPermission({ mode: 'readwrite' });
+        if (permission !== 'granted') {
+            setIsHandleAuthorized(false);
+            return;
+        }
+
+        const files = [];
+        try {
+            for await (const entry of handle.values()) {
+                if (entry.kind === 'file' && (entry.name.endsWith('.webm') || entry.name.endsWith('.mp4'))) {
+                    const file = await entry.getFile();
+                    files.push({
+                        name: entry.name,
+                        handle: entry,
+                        size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+                        date: new Date(file.lastModified).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
+                        timestamp: file.lastModified
+                    });
+                }
+            }
+            // Sort by latest timestamp (newest first)
+            setLibraryFiles(files.sort((a, b) => b.timestamp - a.timestamp));
+            setIsHandleAuthorized(true);
+        } catch (err) {
+            console.error('History sync failed:', err);
+            if (err.name === 'NotAllowedError') setIsHandleAuthorized(false);
+        }
+    };
+
+    const playVideo = async (fileEntry) => {
+        if (editingFileName) return; // Don't play while renaming
+        try {
+            const file = await fileEntry.getFile();
+            const url = URL.createObjectURL(file);
+            setSelectedVideoUrl(url);
+        } catch (err) {
+            alert('File not found. It may have been moved or deleted.');
+            syncLibrary(); // Refresh to clean up
+        }
+    };
+
+    const startRename = (e, file) => {
+        e.stopPropagation();
+        setEditingFileName(file.name);
+        setNewName(file.name);
+    };
+
+    const handleRename = async (e, fileHandle) => {
+        e.stopPropagation();
+        if (!newName || newName === fileHandle.name) {
+            setEditingFileName(null);
+            return;
+        }
+
+        try {
+            // Ensure extension is preserved or added
+            let finalName = newName;
+            const ext = fileHandle.name.split('.').pop();
+            if (!finalName.endsWith(`.${ext}`)) {
+                finalName += `.${ext}`;
+            }
+
+            await fileHandle.move(finalName);
+            setEditingFileName(null);
+            syncLibrary();
+        } catch (err) {
+            console.error('Rename failed:', err);
+            alert('Rename failed. Check permissions or if file exists.');
+        }
+    };
+
+    // Sync on mount if handle exists (not possible with directory picker as it requires interaction)
+    // So we just sync whenever history is opened
+    useEffect(() => {
+        if (isHistoryOpen && directoryHandle) {
+            syncLibrary();
+        }
+    }, [isHistoryOpen]);
 
     const stopRecording = () => {
         if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
@@ -335,9 +489,18 @@ const ScreenRecorder = () => {
 
     return (
         <div className="recorder-container">
-            <h2 style={{ color: 'var(--primary)' }}>Stability Phase: Direct + Bubble (Debug)</h2>
+            <header className="header-section" style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ visibility: 'hidden' }}>Dummy</div> {/* Spacing spacer */}
+                <div style={{ textAlign: 'center' }}>
+                    <h1>Screen Studio</h1>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Premium Recording Syncing with your PC</p>
+                </div>
+                <button className="btn btn-outline" onClick={() => setIsHistoryOpen(!isHistoryOpen)}>
+                    History {libraryFiles.length > 0 && `(${libraryFiles.length})`}
+                </button>
+            </header>
 
-            <div className="preview-wrapper">
+            <div className={`preview-wrapper ${isRecording ? 'is-recording' : ''}`}>
                 <canvas
                     ref={canvasRef}
                     width={1280}
@@ -353,72 +516,178 @@ const ScreenRecorder = () => {
                     onMouseLeave={handleMouseUp}
                 />
                 {!cameraStream && !screenStream && (
-                    <div className="preview-placeholder">Sources Inactive</div>
+                    <div className="preview-placeholder">Sources Inactive — Enable Screen or Camera to start</div>
                 )}
 
                 {status === 'recording' && (
                     <div className="status-badge status-recording">
                         <span className="status-dot"></span>
-                        REC {cameraStream ? 'BUBBLE' : 'DIRECT'}
+                        REC {cameraStream ? 'CANVAS' : 'DIRECT'}
                     </div>
                 )}
             </div>
 
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', margin: '1rem 0', padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Frame Shape:</span>
-                {['circle', 'rounded-rect', 'square'].map(s => (
-                    <button key={s} onClick={() => setWebcamShape(s)}
-                        className={`btn btn-outline ${webcamShape === s ? 'active' : ''}`}
-                        style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem' }}>
-                        {s === 'rounded-rect' ? 'Rounded' : s.charAt(0).toUpperCase() + s.slice(1)}
-                    </button>
-                ))}
-            </div>
+            <div className="control-bar-container">
+                {cameraStream && !isRecording && (
+                    <div className="camera-dropdown glass-card">
+                        <div className="setting-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '1.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <span className="setting-label">Frame</span>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                    {['circle', 'rounded-rect', 'square'].map(s => (
+                                        <button key={s} onClick={() => setWebcamShape(s)}
+                                            className={`btn-icon ${webcamShape === s ? 'active' : ''}`}
+                                            title={s}>
+                                            <div className={`shape-preview ${s}`}></div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', margin: '0.5rem 0 1.5rem 0', padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Bubble Size:</span>
-                {[
-                    { label: 'Small', val: 0.25 },
-                    { label: 'Medium', val: 0.40 },
-                    { label: 'Large', val: 0.55 }
-                ].map(s => (
-                    <button key={s.label} onClick={() => setWebcamScale(s.val)}
-                        className={`btn btn-outline ${webcamScale === s.val ? 'active' : ''}`}
-                        style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem' }}>
-                        {s.label}
-                    </button>
-                ))}
-            </div>
+                            <div style={{ width: '1px', alignSelf: 'stretch', background: 'var(--glass-border)' }}></div>
 
-            <div className="controls-panel">
-                <div style={{ display: 'flex', gap: '0.5rem', marginRight: '1rem' }}>
-                    <button className={`btn ${screenStream ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={toggleScreen} disabled={isRecording}>
-                        {screenStream ? 'Screen Off' : 'Screen On'}
-                    </button>
-                    <button className={`btn ${cameraStream ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={toggleCamera} disabled={isRecording}>
-                        {cameraStream ? 'Cam Off' : 'Cam On'}
-                    </button>
-                    <button className={`btn ${audioStream ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={toggleMic} disabled={isRecording}>
-                        {audioStream ? 'Mic Off' : 'Mic On'}
-                    </button>
-                </div>
-
-                {(screenStream || cameraStream) && (
-                    <button className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
-                        onClick={isRecording ? stopRecording : startRecording}>
-                        {isRecording ? 'Stop' : 'Start Recording'}
-                    </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <span className="setting-label">Size</span>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    {[
+                                        { label: 'S', val: 0.25 },
+                                        { label: 'M', val: 0.40 },
+                                        { label: 'L', val: 0.55 }
+                                    ].map(s => (
+                                        <button key={s.label} onClick={() => setWebcamScale(s.val)}
+                                            className={`btn-small ${webcamScale === s.val ? 'active' : ''}`}>
+                                            {s.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
-                <button className="btn btn-outline" onClick={stopAll}>Reset</button>
+                <div className="control-bar">
+                    <div className="source-toggles" style={{ display: 'flex', gap: '0.5rem', background: 'var(--glass)', padding: '0.4rem', borderRadius: '100px', border: '1px solid var(--glass-border)' }}>
+                        <button className={`btn-pill ${screenStream ? 'active' : ''}`}
+                            onClick={toggleScreen} disabled={isRecording}>
+                            {screenStream ? '● Screen' : 'Screen'}
+                        </button>
+                        <button className={`btn-pill ${cameraStream ? 'active' : ''}`}
+                            onClick={toggleCamera} disabled={isRecording}>
+                            {cameraStream ? '● Camera' : 'Camera'}
+                        </button>
+                        <button className={`btn-pill ${audioStream ? 'active' : ''}`}
+                            onClick={toggleMic} disabled={isRecording}>
+                            {audioStream ? '● Mic' : 'Mic'}
+                        </button>
+                    </div>
+
+                    <div className="main-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        {(screenStream || cameraStream) && (
+                            <button className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
+                                onClick={isRecording ? stopRecording : startRecording}>
+                                {isRecording ? 'Stop' : 'Start Recording'}
+                            </button>
+                        )}
+                        <button className="btn-icon-bg" onClick={stopAll} title="Reset">✕</button>
+                    </div>
+                </div>
             </div>
 
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '1rem' }}>
-                Mode: {cameraStream ? 'Canvas (Optimized)' : 'Direct (Zero Lag)'}
+
+            <div className="mode-info">
+                <div className="status-dot" style={{ background: cameraStream ? 'var(--primary)' : 'var(--success)' }}></div>
+                <span>Current Mode: {cameraStream ? 'Optimized Canvas' : 'Direct Hardware'}</span>
             </div>
+
+            <footer style={{ marginTop: 'auto', paddingTop: '4rem', color: 'var(--text-muted)', fontSize: '0.75rem', width: '100%', maxWidth: '600px', textAlign: 'center', lineHeight: '1.5' }}>
+                <p>© 2026 Gravity Labs. Built for performance and resilience.</p>
+            </footer>
+
+            {/* History Sidebar */}
+            <div className={`sidebar ${isHistoryOpen ? 'open' : ''}`}>
+                <div className="sidebar-header">
+                    <h3 style={{ fontSize: '1.2rem' }}>Recent Recordings</h3>
+                    <button className="btn-icon-bg" onClick={() => setIsHistoryOpen(false)}>✕</button>
+                </div>
+
+                {!directoryHandle ? (
+                    <div className="empty-state">
+                        <span style={{ fontSize: '3rem', marginBottom: '1rem', display: 'block' }}>📁</span>
+                        <p>Connect a folder to track your recordings on this PC.</p>
+                        <button className="btn btn-primary" onClick={connectFolder} style={{ marginTop: '1.5rem', width: '100%' }}>
+                            Select Workspace Folder
+                        </button>
+                    </div>
+                ) : !isHandleAuthorized ? (
+                    <div className="empty-state">
+                        <span style={{ fontSize: '3rem', marginBottom: '1rem', display: 'block' }}>🔒</span>
+                        <p>Connection lost after refresh.</p>
+                        <button className="btn btn-primary" onClick={resumeSync} style={{ marginTop: '1.5rem', width: '100%' }}>
+                            Resume Sync with {directoryHandle.name}
+                        </button>
+                        <button onClick={connectFolder} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem', marginTop: '1rem' }}>Pick another folder</button>
+                    </div>
+                ) : (
+                    <div className="sidebar-content">
+                        <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Connected to: {directoryHandle.name}</span>
+                            <button onClick={connectFolder} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.7rem' }}>Change</button>
+                        </div>
+
+                        {libraryFiles.length === 0 ? (
+                            <div className="empty-state">No recordings found in this folder.</div>
+                        ) : (
+                            libraryFiles.map(file => (
+                                <div key={file.name} className="video-card" onClick={() => playVideo(file.handle)}>
+                                    <div className="video-thumb">
+                                        <span style={{ fontSize: '1.5rem' }}>▶</span>
+                                    </div>
+                                    <div className="video-info">
+                                        {editingFileName === file.name ? (
+                                            <div onClick={e => e.stopPropagation()}>
+                                                <input
+                                                    autoFocus
+                                                    className="rename-input"
+                                                    value={newName}
+                                                    onChange={e => setNewName(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && handleRename(e, file.handle)}
+                                                />
+                                                <div className="rename-actions">
+                                                    <button className="btn-small active" onClick={e => handleRename(e, file.handle)}>Save</button>
+                                                    <button className="btn-small" onClick={() => setEditingFileName(null)}>Cancel</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="video-title-row">
+                                                    <span className="video-title">{file.name}</span>
+                                                    <button className="btn-rename" onClick={e => startRename(e, file)} title="Rename">✎</button>
+                                                </div>
+                                                <span className="video-meta">{file.date} • {file.size}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Video Player Modal */}
+            {selectedVideoUrl && (
+                <div className="modal-overlay" onClick={() => setSelectedVideoUrl(null)}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="btn-icon-bg modal-close" onClick={() => setSelectedVideoUrl(null)}>✕</button>
+                        <video
+                            src={selectedVideoUrl}
+                            controls
+                            autoPlay
+                            style={{ width: '100%', display: 'block' }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -31,15 +31,6 @@ function App() {
       <main>
         <ScreenRecorder />
       </main>
-
-      <footer style={{
-        position: 'absolute',
-        bottom: '2rem',
-        color: 'var(--text-muted)',
-        fontSize: '0.875rem'
-      }}>
-        &copy; 2026 Gravity Labs. Built for performance and resilience.
-      </footer>
     </div>
   );
 }
