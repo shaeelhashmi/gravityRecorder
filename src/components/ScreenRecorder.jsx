@@ -444,11 +444,14 @@ const ScreenRecorder = () => {
             const file = await metaHandle.getFile();
             const text = await file.text();
             if (text) {
-                setCloudRegistry(JSON.parse(text));
+                const data = JSON.parse(text);
+                setCloudRegistry(data);
+                return data;
             }
         } catch (err) {
             console.warn('Could not load metadata:', err);
         }
+        return {};
     };
 
     const saveCloudMetadata = async (newMeta) => {
@@ -465,8 +468,9 @@ const ScreenRecorder = () => {
         }
     };
 
-    const handleGoogleAuth = (onSuccess) => {
-        if (googleToken) return onSuccess(googleToken);
+    const handleGoogleAuth = (onSuccess, forcePrompt = true, onFailure = () => { }) => {
+        // Only return cached token if we are NOT forcing a prompt or refresh
+        if (!forcePrompt && googleToken) return onSuccess(googleToken);
 
         const client = window.google.accounts.oauth2.initTokenClient({
             client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
@@ -476,10 +480,15 @@ const ScreenRecorder = () => {
                     setGoogleToken(response.access_token);
                     fetchUserProfile(response.access_token);
                     onSuccess(response.access_token);
+                } else if (response.error) {
+                    console.error('Auth callback error:', response.error);
+                    onFailure(response.error);
                 }
             },
         });
-        client.requestAccessToken();
+
+        // Request token. If prompt: '' it tries to refresh silently.
+        client.requestAccessToken({ prompt: forcePrompt ? 'select_account' : '' });
     };
 
     const fetchUserProfile = async (token) => {
@@ -510,41 +519,79 @@ const ScreenRecorder = () => {
         showToast('Cloud Disconnected', 'You have been signed out', 'info');
     };
 
-    const auditCloudRegistry = async (token = googleToken, currentRegistry = cloudRegistry) => {
-        if (!token || Object.keys(currentRegistry).length === 0) return;
+    const auditCloudRegistry = async (token = googleToken, registryToAudit = cloudRegistry) => {
+        if (!token) {
+            console.log('☁️ [Audit Skip] No Google Token found.');
+            return;
+        }
+        if (Object.keys(registryToAudit).length === 0) {
+            console.log('☁️ [Audit Skip] Local registry is empty.');
+            return;
+        }
+
+        console.log('☁️ [Audit] Initiating Batch Call to Google Drive...', {
+            apiUrl: 'https://www.googleapis.com/drive/v3/files',
+            localItemsCount: Object.keys(registryToAudit).length
+        });
 
         try {
-            // 1. Fetch all files uploaded by this app on Drive
-            // Using 'spaces=drive' and q to filter for videos. 
-            // In a real app, we might use appProperties to be more precise.
-            const resp = await fetch('https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id)', {
+            const query = encodeURIComponent("trashed = false");
+            const url = `https://www.googleapis.com/drive/v3/files?pageSize=1000&q=${query}&fields=files(id)`;
+
+            console.log('☁️ [Audit] Fetching:', url);
+
+            const resp = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            if (!resp.ok) throw new Error('Failed to fetch Drive file list');
-            const { files } = await resp.json();
-            const remoteIds = new Set(files.map(f => f.id));
+            if (resp.status === 401) {
+                console.warn('⚠️ [Audit] Token expired (401). Attempting silent re-auth...');
+                handleGoogleAuth((newToken) => {
+                    console.log('🔄 [Audit] Token refreshed! Retrying...');
+                    auditCloudRegistry(newToken, registryToAudit);
+                }, false, (err) => {
+                    console.error('❌ [Audit] Silent re-auth failed. Logging out.', err);
+                    handleLogout();
+                });
+                return;
+            }
 
-            // 2. Identify missing files
+            if (!resp.ok) {
+                const errText = await resp.text();
+                console.error('❌ [Audit] Google API error:', resp.status, errText);
+                return;
+            }
+
+            const { files } = await resp.json();
+            const remoteIds = new Set((files || []).map(f => f.id));
+
+            console.log('☁️ [Audit] Results received from Google Drive:', {
+                foundOnDrive: remoteIds.size,
+                remoteFileIds: Array.from(remoteIds)
+            });
+
             let cleaned = false;
-            const newRegistry = { ...currentRegistry };
+            const newRegistry = { ...registryToAudit };
             let removedCount = 0;
 
             for (const [sig, data] of Object.entries(newRegistry)) {
                 if (!remoteIds.has(data.driveId)) {
+                    console.log('🗑️ [Audit] Ghost link found! Pruning ID:', data.driveId);
                     delete newRegistry[sig];
                     cleaned = true;
                     removedCount++;
                 }
             }
 
-            // 3. Persist if changed
             if (cleaned) {
                 await saveCloudMetadata(newRegistry);
-                showToast('Cloud Sync Updated', `${removedCount} missing cloud links removed from registry.`, 'info');
+                showToast('Cloud Sync Updated', `Pruned ${removedCount} dead links.`, 'info');
+                console.log(`✅ [Audit] Pruning complete. ${removedCount} stale entries removed.`);
+            } else {
+                console.log('✅ [Audit] Success. Everything in local registry matches Drive.');
             }
         } catch (err) {
-            console.error('Cloud audit failed:', err);
+            console.error('❌ [Audit] Unexpected Failure:', err);
         }
     };
 
@@ -564,7 +611,7 @@ const ScreenRecorder = () => {
                 };
 
                 // 2. Initiate Resumable Upload
-                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+                let response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -572,6 +619,18 @@ const ScreenRecorder = () => {
                     },
                     body: JSON.stringify(metadata),
                 });
+
+                if (response.status === 401) {
+                    console.warn('⚠️ [Upload] Token expired. Silent refreshing...');
+                    handleGoogleAuth(async (newToken) => {
+                        console.log('🔄 [Upload] Refreshed! Retrying...');
+                        uploadToDrive(fileHandle); // Recursive retry with NEW token
+                    }, false, () => {
+                        console.error('❌ [Upload] Refresh failed. Logging out.');
+                        handleLogout();
+                    });
+                    return;
+                }
 
                 if (!response.ok) throw new Error('Failed to initiate upload');
                 const uploadUrl = response.headers.get('Location');
@@ -619,7 +678,7 @@ const ScreenRecorder = () => {
                     return next;
                 });
             }
-        });
+        }, false);
     };
 
     // Load state from storage on mount
@@ -673,11 +732,11 @@ const ScreenRecorder = () => {
         if (!handle) return;
 
         // Load Cloud Mapping Registry
-        await loadCloudMetadata(handle);
+        const freshRegistry = await loadCloudMetadata(handle);
 
         // Audit Cloud Registry (Batch Sync) if logged in
         if (googleToken) {
-            auditCloudRegistry();
+            auditCloudRegistry(googleToken, freshRegistry);
         }
 
         // Ensure we have permission
