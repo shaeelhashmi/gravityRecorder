@@ -494,6 +494,9 @@ const ScreenRecorder = () => {
             // Persist to storage
             await storageManager.setSetting('cloud_user_token', token);
             await storageManager.setSetting('cloud_user_profile', profile);
+
+            // Trigger audit after login
+            auditCloudRegistry(token);
         } catch (err) {
             console.error('Profile fetch failed:', err);
         }
@@ -505,6 +508,44 @@ const ScreenRecorder = () => {
         await storageManager.removeSetting('cloud_user_token');
         await storageManager.removeSetting('cloud_user_profile');
         showToast('Cloud Disconnected', 'You have been signed out', 'info');
+    };
+
+    const auditCloudRegistry = async (token = googleToken, currentRegistry = cloudRegistry) => {
+        if (!token || Object.keys(currentRegistry).length === 0) return;
+
+        try {
+            // 1. Fetch all files uploaded by this app on Drive
+            // Using 'spaces=drive' and q to filter for videos. 
+            // In a real app, we might use appProperties to be more precise.
+            const resp = await fetch('https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=files(id)', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!resp.ok) throw new Error('Failed to fetch Drive file list');
+            const { files } = await resp.json();
+            const remoteIds = new Set(files.map(f => f.id));
+
+            // 2. Identify missing files
+            let cleaned = false;
+            const newRegistry = { ...currentRegistry };
+            let removedCount = 0;
+
+            for (const [sig, data] of Object.entries(newRegistry)) {
+                if (!remoteIds.has(data.driveId)) {
+                    delete newRegistry[sig];
+                    cleaned = true;
+                    removedCount++;
+                }
+            }
+
+            // 3. Persist if changed
+            if (cleaned) {
+                await saveCloudMetadata(newRegistry);
+                showToast('Cloud Sync Updated', `${removedCount} missing cloud links removed from registry.`, 'info');
+            }
+        } catch (err) {
+            console.error('Cloud audit failed:', err);
+        }
     };
 
     const uploadToDrive = async (fileHandle) => {
@@ -633,6 +674,11 @@ const ScreenRecorder = () => {
 
         // Load Cloud Mapping Registry
         await loadCloudMetadata(handle);
+
+        // Audit Cloud Registry (Batch Sync) if logged in
+        if (googleToken) {
+            auditCloudRegistry();
+        }
 
         // Ensure we have permission
         const permission = await handle.queryPermission({ mode: 'readwrite' });
