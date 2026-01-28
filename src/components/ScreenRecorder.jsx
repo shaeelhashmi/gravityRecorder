@@ -13,6 +13,7 @@ const ScreenRecorder = () => {
     const [audioStream, setAudioStream] = useState(null);
     const [cameraStream, setCameraStream] = useState(null);
     const [webcamShape, setWebcamShape] = useState('circle'); // circle, rounded-rect, square
+    const [webcamScale, setWebcamScale] = useState(0.40); // Default to Medium (0.40)
 
     const mediaRecorderRef = useRef(null);
     const drawTimerRef = useRef(null);
@@ -133,7 +134,7 @@ const ScreenRecorder = () => {
 
             // 2. Draw Camera Bubble
             if (cameraStream && cameraVideoRef.current.readyState >= 2) {
-                const bubbleSize = Math.min(canvas.width, canvas.height) * 0.25;
+                const bubbleSize = Math.min(canvas.width, canvas.height) * webcamScale;
                 const margin = 20;
                 const bx = margin;
                 const by = canvas.height - bubbleSize - margin;
@@ -203,7 +204,7 @@ const ScreenRecorder = () => {
         } else {
             if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
         }
-    }, [cameraStream, screenStream, webcamShape]);
+    }, [cameraStream, screenStream, webcamShape, webcamScale]);
 
     const startRecording = async () => {
         try {
@@ -315,6 +316,21 @@ const ScreenRecorder = () => {
                         className={`btn btn-outline ${webcamShape === s ? 'active' : ''}`}
                         style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem' }}>
                         {s === 'rounded-rect' ? 'Rounded' : s.charAt(0).toUpperCase() + s.slice(1)}
+                    </button>
+                ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', margin: '0.5rem 0 1.5rem 0', padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Bubble Size:</span>
+                {[
+                    { label: 'Small', val: 0.25 },
+                    { label: 'Medium', val: 0.40 },
+                    { label: 'Large', val: 0.55 }
+                ].map(s => (
+                    <button key={s.label} onClick={() => setWebcamScale(s.val)}
+                        className={`btn btn-outline ${webcamScale === s.val ? 'active' : ''}`}
+                        style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem' }}>
+                        {s.label}
                     </button>
                 ))}
             </div>
