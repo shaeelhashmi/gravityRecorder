@@ -1,6 +1,7 @@
 const DB_NAME = 'ScreenRecorderDB';
-const STORE_NAME = 'chunks';
-const DB_VERSION = 1;
+const STORE_CHUNKS = 'chunks';
+const STORE_SETTINGS = 'settings';
+const DB_VERSION = 2; // Upgraded for settings store
 
 class StorageManager {
   constructor() {
@@ -19,8 +20,11 @@ class StorageManager {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { autoIncrement: true });
+        if (!db.objectStoreNames.contains(STORE_CHUNKS)) {
+          db.createObjectStore(STORE_CHUNKS, { autoIncrement: true });
+        }
+        if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
+          db.createObjectStore(STORE_SETTINGS);
         }
       };
     });
@@ -29,8 +33,8 @@ class StorageManager {
   async saveChunk(blob) {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = this.db.transaction([STORE_CHUNKS], 'readwrite');
+      const store = transaction.objectStore(STORE_CHUNKS);
       const request = store.add(blob);
 
       request.onsuccess = () => resolve();
@@ -41,8 +45,8 @@ class StorageManager {
   async getAllChunks() {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = this.db.transaction([STORE_CHUNKS], 'readonly');
+      const store = transaction.objectStore(STORE_CHUNKS);
       const request = store.getAll();
 
       request.onsuccess = () => resolve(request.result);
@@ -53,12 +57,34 @@ class StorageManager {
   async clearStorage() {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = this.db.transaction([STORE_CHUNKS], 'readwrite');
+      const store = transaction.objectStore(STORE_CHUNKS);
       const request = store.clear();
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject('Error clearing storage');
+    });
+  }
+
+  async setSetting(key, value) {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([STORE_SETTINGS], 'readwrite');
+      const store = transaction.objectStore(STORE_SETTINGS);
+      const request = store.put(value, key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject('Error saving setting');
+    });
+  }
+
+  async getSetting(key) {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([STORE_SETTINGS], 'readonly');
+      const store = transaction.objectStore(STORE_SETTINGS);
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject('Error getting setting');
     });
   }
 
