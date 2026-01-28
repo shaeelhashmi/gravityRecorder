@@ -29,6 +29,7 @@ const ScreenRecorder = () => {
 
     // Google Drive Sync State
     const [googleToken, setGoogleToken] = useState(null);
+    const [cloudUser, setCloudUser] = useState({ isLoggedIn: false, profile: null });
     const [cloudRegistry, setCloudRegistry] = useState({}); // signature -> { driveId, shareLink }
     const [uploadProgress, setUploadProgress] = useState({}); // filename -> percentage
 
@@ -469,15 +470,41 @@ const ScreenRecorder = () => {
 
         const client = window.google.accounts.oauth2.initTokenClient({
             client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/drive.file',
+            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
             callback: (response) => {
                 if (response.access_token) {
                     setGoogleToken(response.access_token);
+                    fetchUserProfile(response.access_token);
                     onSuccess(response.access_token);
                 }
             },
         });
         client.requestAccessToken();
+    };
+
+    const fetchUserProfile = async (token) => {
+        try {
+            const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const profile = await resp.json();
+            const userData = { isLoggedIn: true, profile };
+            setCloudUser(userData);
+
+            // Persist to storage
+            await storageManager.setSetting('cloud_user_token', token);
+            await storageManager.setSetting('cloud_user_profile', profile);
+        } catch (err) {
+            console.error('Profile fetch failed:', err);
+        }
+    };
+
+    const handleLogout = async () => {
+        setGoogleToken(null);
+        setCloudUser({ isLoggedIn: false, profile: null });
+        await storageManager.removeSetting('cloud_user_token');
+        await storageManager.removeSetting('cloud_user_profile');
+        showToast('Cloud Disconnected', 'You have been signed out', 'info');
     };
 
     const uploadToDrive = async (fileHandle) => {
@@ -554,18 +581,26 @@ const ScreenRecorder = () => {
         });
     };
 
-    // Load handle from storage on mount
+    // Load state from storage on mount
     useEffect(() => {
-        const loadHandle = async () => {
+        const loadSavedState = async () => {
+            // 1. Workspace Handle
             const savedHandle = await storageManager.getSetting('workspace_handle');
             if (savedHandle) {
                 setDirectoryHandle(savedHandle);
-                // Check if we still have permission (browsers usually reset this on refresh)
                 const state = await savedHandle.queryPermission({ mode: 'readwrite' });
                 setIsHandleAuthorized(state === 'granted');
             }
+
+            // 2. Cloud User
+            const savedToken = await storageManager.getSetting('cloud_user_token');
+            const savedProfile = await storageManager.getSetting('cloud_user_profile');
+            if (savedToken && savedProfile) {
+                setGoogleToken(savedToken);
+                setCloudUser({ isLoggedIn: true, profile: savedProfile });
+            }
         };
-        loadHandle();
+        loadSavedState();
     }, []);
 
     const connectFolder = async () => {
@@ -841,8 +876,48 @@ const ScreenRecorder = () => {
             {/* History Sidebar */}
             <div className={`sidebar ${isHistoryOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
-                    <h3 style={{ fontSize: '1.2rem' }}>Recent Recordings</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <h3 style={{ fontSize: '1.2rem', margin: 0 }}>Library</h3>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Files synced to disk</span>
+                    </div>
                     <button className="btn-icon-bg" onClick={() => setIsHistoryOpen(false)}>✕</button>
+                </div>
+
+                {/* Cloud Hub Section */}
+                <div className="cloud-hub glass-card" style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.02)' }}>
+                    {!cloudUser.isLoggedIn ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <span style={{ fontSize: '1.2rem' }}>☁️</span>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Cloud Sync</span>
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Sign in to share links</span>
+                                </div>
+                            </div>
+                            <button className="btn-small active" onClick={() => handleGoogleAuth(() => { })}>Connect</button>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                {cloudUser.profile?.picture ? (
+                                    <img src={cloudUser.profile.picture} style={{ width: '32px', height: '32px', borderRadius: '50%', border: '1px solid var(--primary)' }} alt="" />
+                                ) : (
+                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' }}>
+                                        {cloudUser.profile?.name?.[0] || 'U'}
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {cloudUser.profile?.name || 'User'}
+                                    </span>
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        ● <span style={{ color: 'var(--text-muted)' }}>Connected</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <button className="btn-small" onClick={handleLogout} style={{ opacity: 0.6, fontSize: '0.6rem' }}>Sign Out</button>
+                        </div>
+                    )}
                 </div>
 
                 {!directoryHandle ? (
