@@ -2,6 +2,17 @@ import React, { useRef, useState, useEffect } from 'react';
 import { mediaManager } from '../utils/MediaManager';
 import { storageManager } from '../utils/StorageManager';
 
+const BACKGROUND_PRESETS = [
+    { id: 'none', name: 'None', colors: null },
+    { id: 'midnight', name: 'Midnight Dream', colors: ['#0f172a', '#1e1b4b', '#312e81'] },
+    { id: 'aurora', name: 'Aurora Flare', colors: ['#064e3b', '#065f46', '#0891b2'] },
+    { id: 'sunset', name: 'Sunset Vibe', colors: ['#7c2d12', '#991b1b', '#f59e0b'] },
+    { id: 'cyber', name: 'Cyber Glow', colors: ['#4c1d95', '#701a75', '#2563eb'] },
+    { id: 'rose', name: 'Dusty Rose', colors: ['#881337', '#9f1239', '#fb7185'] },
+    { id: 'ocean', name: 'Deep Ocean', colors: ['#1e3a8a', '#1d4ed8', '#0ea5e9'] },
+    { id: 'mesh', name: 'Mesh Palette', colors: ['#4338ca', '#db2777', '#f59e0b'] },
+];
+
 const ScreenRecorder = () => {
     const canvasRef = useRef(null);
     const screenVideoRef = useRef(null);
@@ -14,6 +25,9 @@ const ScreenRecorder = () => {
     const [cameraStream, setCameraStream] = useState(null);
     const [webcamShape, setWebcamShape] = useState('circle'); // circle, rounded-rect, square
     const [webcamScale, setWebcamScale] = useState(0.40); // Default to Medium (0.40)
+    const [activeBg, setActiveBg] = useState('none');
+    const [screenScale, setScreenScale] = useState(1.0);
+    const [isBgPanelOpen, setIsBgPanelOpen] = useState(false);
 
     // Video Library & Sync State
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -132,7 +146,7 @@ const ScreenRecorder = () => {
         const ctx = canvas.getContext('2d', { alpha: false });
 
         const draw = () => {
-            if (!screenStream && !cameraStream) {
+            if (!screenStream && !cameraStream && activeBg === 'none') {
                 if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
                 return;
             }
@@ -151,12 +165,37 @@ const ScreenRecorder = () => {
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Screen (Background)
-            if (screenStream && screenVideoRef.current.readyState >= 2) {
-                ctx.drawImage(screenVideoRef.current, 0, 0, canvas.width, canvas.height);
+            // 1. Draw Background
+            const preset = BACKGROUND_PRESETS.find(p => p.id === activeBg);
+            if (preset && preset.colors) {
+                const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                preset.colors.forEach((c, i) => grad.addColorStop(i / (preset.colors.length - 1), c));
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
             } else {
                 ctx.fillStyle = '#1a1a1a';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // 2. Draw Screen (Centered and Scaled)
+            if (screenStream && screenVideoRef.current.readyState >= 2) {
+                const sw = canvas.width * screenScale;
+                const sh = canvas.height * screenScale;
+                const sx = (canvas.width - sw) / 2;
+                const sy = (canvas.height - sh) / 2;
+
+                if (screenScale < 1.0) {
+                    ctx.save();
+                    ctx.shadowBlur = 40;
+                    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                    ctx.beginPath();
+                    ctx.roundRect(sx, sy, sw, sh, 20);
+                    ctx.clip();
+                    ctx.drawImage(screenVideoRef.current, sx, sy, sw, sh);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(screenVideoRef.current, 0, 0, canvas.width, canvas.height);
+                }
             }
 
             // 2. Draw Camera Bubble
@@ -214,7 +253,7 @@ const ScreenRecorder = () => {
             }
 
             // Continue loop if active
-            if (cameraStream || screenStream) {
+            if (cameraStream || screenStream || activeBg !== 'none') {
                 drawTimerRef.current = setTimeout(draw, 1000 / 30);
             }
         };
@@ -225,12 +264,12 @@ const ScreenRecorder = () => {
 
     // Trigger canvas loop when sources change
     useEffect(() => {
-        if (cameraStream || screenStream) {
+        if (cameraStream || screenStream || activeBg !== 'none') {
             drawCanvas();
         } else {
             if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
         }
-    }, [cameraStream, screenStream, webcamShape, webcamScale]);
+    }, [cameraStream, screenStream, webcamShape, webcamScale, activeBg, screenScale]);
 
     // Drag and Drop Logic (Lag-Free)
     const getCanvasMousePos = (e) => {
@@ -282,8 +321,8 @@ const ScreenRecorder = () => {
             console.log('Finalizing stream for MediaRecorder...');
             const tracks = [];
 
-            // Case A: Webcam is active (requires canvas for bubble)
-            if (cameraStream) {
+            // Case A: Webcam is active OR Background is selected (requires canvas for bubble/frame)
+            if (cameraStream || activeBg !== 'none') {
                 const canvasStream = canvasRef.current.captureStream(30);
                 tracks.push(...canvasStream.getVideoTracks());
             }
@@ -468,9 +507,11 @@ const ScreenRecorder = () => {
         }
     };
 
-    const handleGoogleAuth = (onSuccess, forcePrompt = true, onFailure = () => { }) => {
-        // Only return cached token if we are NOT forcing a prompt or refresh
-        if (!forcePrompt && googleToken) return onSuccess(googleToken);
+    const [isAuditing, setIsAuditing] = useState(false);
+
+    const handleGoogleAuth = (onSuccess, forcePrompt = true, onFailure = () => { }, bypassCache = false) => {
+        // Only return cached token if we are NOT forcing a prompt or refresh, and not bypassing cache
+        if (!forcePrompt && googleToken && !bypassCache) return onSuccess(googleToken);
 
         const client = window.google.accounts.oauth2.initTokenClient({
             client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
@@ -520,14 +561,16 @@ const ScreenRecorder = () => {
     };
 
     const auditCloudRegistry = async (token = googleToken, registryToAudit = cloudRegistry) => {
-        if (!token) {
-            console.log('☁️ [Audit Skip] No Google Token found.');
+        if (!token || isAuditing) {
+            console.log('☁️ [Audit Skip] No Google Token found or already auditing.');
             return;
         }
         if (Object.keys(registryToAudit).length === 0) {
             console.log('☁️ [Audit Skip] Local registry is empty.');
             return;
         }
+
+        setIsAuditing(true);
 
         console.log('☁️ [Audit] Initiating Batch Call to Google Drive...', {
             apiUrl: 'https://www.googleapis.com/drive/v3/files',
@@ -546,13 +589,14 @@ const ScreenRecorder = () => {
 
             if (resp.status === 401) {
                 console.warn('⚠️ [Audit] Token expired (401). Attempting silent re-auth...');
+                setIsAuditing(false); // Reset to allow the retry call
                 handleGoogleAuth((newToken) => {
                     console.log('🔄 [Audit] Token refreshed! Retrying...');
                     auditCloudRegistry(newToken, registryToAudit);
                 }, false, (err) => {
                     console.error('❌ [Audit] Silent re-auth failed. Logging out.', err);
                     handleLogout();
-                });
+                }, true); // bypassCache = true
                 return;
             }
 
@@ -592,6 +636,8 @@ const ScreenRecorder = () => {
             }
         } catch (err) {
             console.error('❌ [Audit] Unexpected Failure:', err);
+        } finally {
+            setIsAuditing(false);
         }
     };
 
@@ -628,7 +674,7 @@ const ScreenRecorder = () => {
                     }, false, () => {
                         console.error('❌ [Upload] Refresh failed. Logging out.');
                         handleLogout();
-                    });
+                    }, true); // bypassCache = true
                     return;
                 }
 
@@ -907,7 +953,7 @@ const ScreenRecorder = () => {
                     <div className="camera-dropdown glass-card">
                         <div className="setting-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '1.5rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                <span className="setting-label">Frame</span>
+                                <span className="setting-label">Webcam Frame</span>
                                 <div style={{ display: 'flex', gap: '0.4rem' }}>
                                     {['circle', 'rounded-rect', 'square'].map(s => (
                                         <button key={s} onClick={() => setWebcamShape(s)}
@@ -922,7 +968,7 @@ const ScreenRecorder = () => {
                             <div style={{ width: '1px', alignSelf: 'stretch', background: 'var(--glass-border)' }}></div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                <span className="setting-label">Size</span>
+                                <span className="setting-label">Webcam Size</span>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     {[
                                         { label: 'S', val: 0.25 },
@@ -940,6 +986,52 @@ const ScreenRecorder = () => {
                     </div>
                 )}
 
+                {isBgPanelOpen && !isRecording && (
+                    <div className="camera-dropdown glass-card">
+                        <div className="setting-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '1.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <span className="setting-label">Aesthetic Gradients</span>
+                                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', maxWidth: '280px' }}>
+                                    {BACKGROUND_PRESETS.map(p => (
+                                        <button key={p.id}
+                                            onClick={() => setActiveBg(p.id)}
+                                            className={`btn-icon ${activeBg === p.id ? 'active' : ''}`}
+                                            title={p.name}
+                                            style={{
+                                                background: p.colors ? `linear-gradient(135deg, ${p.colors.join(', ')})` : 'var(--bg-card)',
+                                                border: activeBg === p.id ? '2px solid var(--primary)' : '1px solid var(--glass-border)',
+                                                overflow: 'hidden'
+                                            }}>
+                                            {p.id === 'none' && <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>None</span>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div style={{ width: '1px', alignSelf: 'stretch', background: 'var(--glass-border)' }}></div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                <span className="setting-label">Screen Layout</span>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    {[
+                                        { label: 'Full', val: 1.0 },
+                                        { label: 'Framed', val: 0.90 },
+                                        { label: 'Compact', val: 0.82 }
+                                    ].map(s => (
+                                        <button key={s.label} onClick={() => setScreenScale(s.val)}
+                                            className={`btn-small ${screenScale === s.val ? 'active' : ''}`}>
+                                            {s.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                                    {screenScale < 1.0 ? '✨ Premium Frame Active' : 'Basic Fullscreen'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="control-bar">
                     <div className="source-toggles" style={{ display: 'flex', gap: '0.5rem', background: 'var(--glass)', padding: '0.4rem', borderRadius: '100px', border: '1px solid var(--glass-border)' }}>
                         <button className={`btn-pill ${screenStream ? 'active' : ''}`}
@@ -947,12 +1039,22 @@ const ScreenRecorder = () => {
                             {screenStream ? '● Screen' : 'Screen'}
                         </button>
                         <button className={`btn-pill ${cameraStream ? 'active' : ''}`}
-                            onClick={toggleCamera} disabled={isRecording}>
+                            onClick={() => {
+                                toggleCamera();
+                                if (!cameraStream) setIsBgPanelOpen(false);
+                            }} disabled={isRecording}>
                             {cameraStream ? '● Camera' : 'Camera'}
                         </button>
                         <button className={`btn-pill ${audioStream ? 'active' : ''}`}
                             onClick={toggleMic} disabled={isRecording}>
                             {audioStream ? '● Mic' : 'Mic'}
+                        </button>
+                        <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
+                        <button className={`btn-pill ${activeBg !== 'none' ? 'active' : ''}`}
+                            onClick={() => {
+                                setIsBgPanelOpen(!isBgPanelOpen);
+                            }} disabled={isRecording}>
+                            {activeBg !== 'none' ? '🎨 Styled' : '🎨 BG'}
                         </button>
                     </div>
 
