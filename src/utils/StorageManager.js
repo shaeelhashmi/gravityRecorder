@@ -88,6 +88,17 @@ class StorageManager {
     });
   }
 
+  async removeSetting(key) {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction([STORE_SETTINGS], 'readwrite');
+      const store = transaction.objectStore(STORE_SETTINGS);
+      const request = store.delete(key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject('Error removing setting');
+    });
+  }
+
   async hasUnsavedData() {
     const chunks = await this.getAllChunks();
     return chunks.length > 0;
