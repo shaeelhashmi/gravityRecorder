@@ -6,10 +6,9 @@ import { getFileSignature } from '../utils/FileUtils';
 import { useStreams } from '../hooks/useStreams';
 import { useFileSystem } from '../hooks/useFileSystem';
 import { useGoogleSync } from '../hooks/useGoogleSync';
+import { useRecording } from '../hooks/useRecording';
 
 const ScreenRecorder = () => {
-    const [isRecording, setIsRecording] = useState(false);
-    const [status, setStatus] = useState('idle');
 
     // Refs for Media & Stage
     const canvasRef = useRef(null);
@@ -54,12 +53,22 @@ const ScreenRecorder = () => {
         loadCloudMetadata, saveCloudMetadata
     } = useGoogleSync(showToast, directoryHandle);
 
+    const {
+        isRecording, status, setStatus,
+        startRecording, stopRecording, resetRecording,
+        mediaRecorderRef
+    } = useRecording({
+        screenStream, audioStream, cameraStream,
+        activeBg, canvasRef,
+        directoryHandle, syncLibrary, generateThumbnail,
+        showToast, setHighlightedFile
+    });
+
     // Position State (using Ref for 0-lag updates)
     const webcamPos = useRef({ x: 20, y: 410 }); // Default Bottom-Left (approx)
     const isDragging = useRef(false);
     const dragOffset = useRef({ x: 0, y: 0 });
 
-    const mediaRecorderRef = useRef(null);
     const drawTimerRef = useRef(null);
 
     // Initialize hidden video elements
@@ -81,7 +90,7 @@ const ScreenRecorder = () => {
 
     const handleStopAll = () => {
         if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+        resetRecording();
         stopStreams();
     };
 
@@ -256,95 +265,6 @@ const ScreenRecorder = () => {
         isDragging.current = false;
     };
 
-    const startRecording = async () => {
-        try {
-            if (!screenStream && !cameraStream) {
-                alert('Enable Screen or Camera first');
-                return;
-            }
-
-            console.log('Finalizing stream for MediaRecorder...');
-            const tracks = [];
-
-            // Case A: Webcam is active OR Background is selected (requires canvas for bubble/frame)
-            if (cameraStream || activeBg !== 'none') {
-                const canvasStream = canvasRef.current.captureStream(30);
-                tracks.push(...canvasStream.getVideoTracks());
-            }
-            // Case B: Screen only (Direct mode for better performance)
-            else if (screenStream) {
-                tracks.push(...screenStream.getVideoTracks());
-            }
-
-            // Add Audio track if available
-            if (audioStream) {
-                tracks.push(...audioStream.getAudioTracks());
-            }
-
-            const recordingStream = new MediaStream(tracks);
-
-            const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
-            const mimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
-
-            const mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
-            mediaRecorderRef.current = mediaRecorder;
-
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) storageManager.saveChunk(e.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const chunks = await storageManager.getAllChunks();
-                if (chunks.length > 0) {
-                    const blob = new Blob(chunks, { type: mimeType });
-                    const fileName = `recording-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
-
-                    // If folder is connected, save directly
-                    if (directoryHandle) {
-                        try {
-                            const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-                            const writable = await fileHandle.createWritable();
-                            await writable.write(blob);
-                            await writable.close();
-                            syncLibrary(directoryHandle); // Refresh
-
-                            // Generate Thumbnail after save
-                            generateThumbnail(blob, fileName, directoryHandle);
-
-                            // Trigger success signals
-                            showToast(`Saved to ${directoryHandle.name}`, fileName, 'success');
-                            setHighlightedFile(fileName);
-                            setTimeout(() => setHighlightedFile(null), 5000); // Clear highlight after 5s
-                        } catch (err) {
-                            console.error('Direct save failed:', err);
-                            // Fallback to manual download if direct save fails
-                            triggerDownload(blob, fileName);
-                            showToast('Direct save failed', 'Download triggered as fallback', 'error');
-                        }
-                    } else {
-                        triggerDownload(blob, fileName);
-                        showToast('Recording Saved', 'Check your downloads folder', 'success');
-                    }
-                }
-                await storageManager.clearStorage();
-            };
-
-            mediaRecorder.start(1000);
-            setIsRecording(true);
-            setStatus('recording');
-        } catch (err) {
-            console.error('Recording start failed:', err);
-            setStatus('error');
-        }
-    };
-
-    const triggerDownload = (blob, fileName) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-    };
 
     // Sync on mount if handle exists (not possible with directory picker as it requires interaction)
     // So we just sync whenever history is opened
@@ -358,11 +278,6 @@ const ScreenRecorder = () => {
         }
     }, [isHistoryOpen, directoryHandle, googleToken, auditCloudRegistry, loadCloudMetadata]);
 
-    const stopRecording = () => {
-        if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
-        setIsRecording(false);
-        setStatus('ready');
-    };
 
 
     return (
