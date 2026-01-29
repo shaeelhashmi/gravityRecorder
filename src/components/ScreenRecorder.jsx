@@ -1,9 +1,10 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { mediaManager } from '../utils/MediaManager';
 import { storageManager } from '../utils/StorageManager';
 import { BACKGROUND_PRESETS } from '../constants/backgrounds';
 import { getFileSignature } from '../utils/FileUtils';
 import { useStreams } from '../hooks/useStreams';
+import { useFileSystem } from '../hooks/useFileSystem';
 
 const ScreenRecorder = () => {
     const [isRecording, setIsRecording] = useState(false);
@@ -24,17 +25,27 @@ const ScreenRecorder = () => {
     const [screenScale, setScreenScale] = useState(1.0);
     const [isBgPanelOpen, setIsBgPanelOpen] = useState(false);
 
-    // Video Library & Sync State
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-    const [directoryHandle, setDirectoryHandle] = useState(null);
-    const [isHandleAuthorized, setIsHandleAuthorized] = useState(false);
-    const [libraryFiles, setLibraryFiles] = useState([]);
-    const [selectedVideoUrl, setSelectedVideoUrl] = useState(null);
-    const [thumbnailMap, setThumbnailMap] = useState({}); // name -> blobUrl
-    const [editingFileName, setEditingFileName] = useState(null); // name of file being renamed
-    const [newName, setNewName] = useState('');
     const [toast, setToast] = useState(null);
     const [highlightedFile, setHighlightedFile] = useState(null);
+
+    const showToast = useCallback((title, message, type = 'info') => {
+        setToast({ title, message, type });
+        setTimeout(() => setToast(null), 4000);
+    }, []);
+
+    const {
+        directoryHandle, setDirectoryHandle,
+        isHandleAuthorized, setIsHandleAuthorized,
+        libraryFiles, setLibraryFiles,
+        thumbnailMap, setThumbnailMap,
+        editingFileName, setEditingFileName,
+        newName, setNewName,
+        selectedVideoUrl, setSelectedVideoUrl,
+        connectFolder, resumeSync, syncLibrary,
+        playVideo, startRename, handleRename,
+        generateThumbnail, getThumbnailUrl
+    } = useFileSystem(showToast, setHighlightedFile);
 
     // Google Drive Sync State
     const [googleToken, setGoogleToken] = useState(null);
@@ -335,78 +346,10 @@ const ScreenRecorder = () => {
         a.click();
     };
 
-    const showToast = (title, message, type = 'info') => {
-        setToast({ title, message, type });
-        setTimeout(() => setToast(null), 4000);
-    };
-
-    // --- Video Library & Thumbnail Logic ---
-
-    const generateThumbnail = async (videoBlob, videoName, dirHandle) => {
-        const video = document.createElement('video');
-        video.src = URL.createObjectURL(videoBlob);
-        video.currentTime = 1; // Jump to 1s
-
-        return new Promise((resolve) => {
-            video.onloadeddata = async () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = 320;
-                canvas.height = 180;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                canvas.toBlob(async (thumbBlob) => {
-                    try {
-                        const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
-                        const thumbName = videoName.replace(/\.[^/.]+$/, "") + ".jpg";
-                        const thumbFileHandle = await assetsHandle.getFileHandle(thumbName, { create: true });
-                        const writable = await thumbFileHandle.createWritable();
-                        await writable.write(thumbBlob);
-                        await writable.close();
-
-                        // Update local map for instant display
-                        const url = URL.createObjectURL(thumbBlob);
-                        setThumbnailMap(prev => ({ ...prev, [videoName]: url }));
-                    } catch (err) {
-                        console.error('Thumbnail save failed:', err);
-                    }
-                    URL.revokeObjectURL(video.src);
-                    resolve();
-                }, 'image/jpeg', 0.7);
-            };
-        });
-    };
-
-    const getThumbnailUrl = async (videoName, videoHandle, dirHandle) => {
-        // 1. Check if already in RAM
-        if (thumbnailMap[videoName]) return thumbnailMap[videoName];
-
-        try {
-            const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
-            const thumbName = videoName.replace(/\.[^/.]+$/, "") + ".jpg";
-
-            try {
-                // 2. Try to load from disk sidecar
-                const thumbFileHandle = await assetsHandle.getFileHandle(thumbName);
-                const file = await thumbFileHandle.getFile();
-                const url = URL.createObjectURL(file);
-                setThumbnailMap(prev => ({ ...prev, [videoName]: url }));
-                return url;
-            } catch {
-                // 3. Generate on-the-fly if missing
-                const videoFile = await videoHandle.getFile();
-                await generateThumbnail(videoFile, videoName, dirHandle);
-                return thumbnailMap[videoName];
-            }
-        } catch (err) {
-            console.warn('Thumbnail engine error:', err);
-            return null;
-        }
-    };
 
     // --- Google Drive Sync & Metadata Logic ---
 
-    const loadCloudMetadata = async (dirHandle) => {
+    const loadCloudMetadata = useCallback(async (dirHandle) => {
         try {
             const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
             const metaHandle = await assetsHandle.getFileHandle('metadata.json', { create: true });
@@ -421,9 +364,9 @@ const ScreenRecorder = () => {
             console.warn('Could not load metadata:', err);
         }
         return {};
-    };
+    }, []);
 
-    const saveCloudMetadata = async (newMeta) => {
+    const saveCloudMetadata = useCallback(async (newMeta) => {
         if (!directoryHandle) return;
         try {
             const assetsHandle = await directoryHandle.getDirectoryHandle('.recorder_assets', { create: true });
@@ -435,11 +378,11 @@ const ScreenRecorder = () => {
         } catch (err) {
             console.error('Metadata save failed:', err);
         }
-    };
+    }, [directoryHandle]);
 
-    const [isAuditing, setIsAuditing] = useState(false);
+    const isAuditing = useRef(false);
 
-    const handleGoogleAuth = (onSuccess, forcePrompt = true, onFailure = () => { }, bypassCache = false) => {
+    const handleGoogleAuth = useCallback((onSuccess, forcePrompt = true, onFailure = () => { }, bypassCache = false) => {
         // Only return cached token if we are NOT forcing a prompt or refresh, and not bypassing cache
         if (!forcePrompt && googleToken && !bypassCache) return onSuccess(googleToken);
 
@@ -460,9 +403,9 @@ const ScreenRecorder = () => {
 
         // Request token. If prompt: '' it tries to refresh silently.
         client.requestAccessToken({ prompt: forcePrompt ? 'select_account' : '' });
-    };
+    }, [googleToken]); // Removed fetchUserProfile dependency
 
-    const fetchUserProfile = async (token) => {
+    const fetchUserProfile = useCallback(async (token) => {
         try {
             const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -480,18 +423,18 @@ const ScreenRecorder = () => {
         } catch (err) {
             console.error('Profile fetch failed:', err);
         }
-    };
+    }, [googleToken]); // Removed auditCloudRegistry dependency, added googleToken for stability
 
-    const handleLogout = async () => {
+    const handleLogout = useCallback(async () => {
         setGoogleToken(null);
         setCloudUser({ isLoggedIn: false, profile: null });
         await storageManager.removeSetting('cloud_user_token');
         await storageManager.removeSetting('cloud_user_profile');
         showToast('Cloud Disconnected', 'You have been signed out', 'info');
-    };
+    }, [showToast]);
 
-    const auditCloudRegistry = async (token = googleToken, registryToAudit = cloudRegistry) => {
-        if (!token || isAuditing) {
+    const auditCloudRegistry = useCallback(async (token = googleToken, registryToAudit = cloudRegistry) => {
+        if (!token || isAuditing.current) {
             console.log('☁️ [Audit Skip] No Google Token found or already auditing.');
             return;
         }
@@ -500,7 +443,7 @@ const ScreenRecorder = () => {
             return;
         }
 
-        setIsAuditing(true);
+        isAuditing.current = true;
 
         console.log('☁️ [Audit] Initiating Batch Call to Google Drive...', {
             apiUrl: 'https://www.googleapis.com/drive/v3/files',
@@ -519,7 +462,7 @@ const ScreenRecorder = () => {
 
             if (resp.status === 401) {
                 console.warn('⚠️ [Audit] Token expired (401). Attempting silent re-auth...');
-                setIsAuditing(false); // Reset to allow the retry call
+                isAuditing.current = false; // Reset to allow the retry call
                 handleGoogleAuth((newToken) => {
                     console.log('🔄 [Audit] Token refreshed! Retrying...');
                     auditCloudRegistry(newToken, registryToAudit);
@@ -567,9 +510,9 @@ const ScreenRecorder = () => {
         } catch (err) {
             console.error('❌ [Audit] Unexpected Failure:', err);
         } finally {
-            setIsAuditing(false);
+            isAuditing.current = false;
         }
-    };
+    }, [googleToken, cloudRegistry, handleGoogleAuth, handleLogout, saveCloudMetadata, showToast]);
 
     const uploadToDrive = async (fileHandle) => {
         handleGoogleAuth(async (token) => {
@@ -679,144 +622,19 @@ const ScreenRecorder = () => {
         loadSavedState();
     }, []);
 
-    const connectFolder = async () => {
-        try {
-            const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            setDirectoryHandle(handle);
-            setIsHandleAuthorized(true);
-            await storageManager.setSetting('workspace_handle', handle);
-            await syncLibrary(handle);
-        } catch (err) {
-            console.warn('Folder connection skipped:', err);
-        }
-    };
 
-    const resumeSync = async () => {
-        if (!directoryHandle) return;
-        try {
-            const state = await directoryHandle.requestPermission({ mode: 'readwrite' });
-            if (state === 'granted') {
-                setIsHandleAuthorized(true);
-                await syncLibrary(directoryHandle);
-            }
-        } catch (err) {
-            console.error('Permission request failed:', err);
-        }
-    };
-
-    const syncLibrary = async (handle = directoryHandle) => {
-        if (!handle) return;
-
-        // Load Cloud Mapping Registry
-        const freshRegistry = await loadCloudMetadata(handle);
-
-        // Audit Cloud Registry (Batch Sync) if logged in
-        if (googleToken) {
-            auditCloudRegistry(googleToken, freshRegistry);
-        }
-
-        // Ensure we have permission
-        const permission = await handle.queryPermission({ mode: 'readwrite' });
-        if (permission !== 'granted') {
-            setIsHandleAuthorized(false);
-            return;
-        }
-
-        const files = [];
-        try {
-            for await (const entry of handle.values()) {
-                if (entry.kind === 'file' && (entry.name.endsWith('.webm') || entry.name.endsWith('.mp4'))) {
-                    const file = await entry.getFile();
-                    files.push({
-                        name: entry.name,
-                        handle: entry,
-                        size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
-                        date: new Date(file.lastModified).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }),
-                        timestamp: file.lastModified,
-                        signature: getFileSignature(file)
-                    });
-                }
-            }
-            // Sort by latest timestamp (newest first)
-            setLibraryFiles(files.sort((a, b) => b.timestamp - a.timestamp));
-            setIsHandleAuthorized(true);
-        } catch (err) {
-            console.error('History sync failed:', err);
-            if (err.name === 'NotAllowedError') setIsHandleAuthorized(false);
-        }
-    };
-
-    const playVideo = async (fileEntry) => {
-        if (editingFileName) return; // Don't play while renaming
-        try {
-            const file = await fileEntry.getFile();
-            const url = URL.createObjectURL(file);
-            setSelectedVideoUrl(url);
-        } catch (err) {
-            alert('File not found. It may have been moved or deleted.');
-            syncLibrary(); // Refresh to clean up
-        }
-    };
-
-    const startRename = (e, file) => {
-        e.stopPropagation();
-        setEditingFileName(file.name);
-        setNewName(file.name);
-    };
-
-    const handleRename = async (e, fileHandle) => {
-        e.stopPropagation();
-        if (!newName || newName === fileHandle.name) {
-            setEditingFileName(null);
-            return;
-        }
-
-        try {
-            // Ensure extension is preserved or added
-            let finalName = newName;
-            const ext = fileHandle.name.split('.').pop();
-            if (!finalName.endsWith(`.${ext}`)) {
-                finalName += `.${ext}`;
-            }
-
-            await fileHandle.move(finalName);
-
-            // Rename thumbnail sidecar if exists
-            try {
-                const assetsHandle = await directoryHandle.getDirectoryHandle('.recorder_assets');
-                const oldThumbName = fileHandle.name.replace(/\.[^/.]+$/, "") + ".jpg";
-                const newThumbName = finalName.replace(/\.[^/.]+$/, "") + ".jpg";
-                const oldThumbHandle = await assetsHandle.getFileHandle(oldThumbName);
-                await oldThumbHandle.move(newThumbName);
-
-                // Update local map
-                setThumbnailMap(prev => {
-                    const next = { ...prev };
-                    if (next[fileHandle.name]) {
-                        next[finalName] = next[fileHandle.name];
-                        delete next[fileHandle.name];
-                    }
-                    return next;
-                });
-            } catch (err) {
-                console.warn('Thumbnail rename skipped (might not exist):', err);
-            }
-
-            setEditingFileName(null);
-            syncLibrary();
-        } catch (err) {
-            console.error('Rename failed:', err);
-            alert('Rename failed. Check permissions or if file exists.');
-        }
-    };
 
     // Sync on mount if handle exists (not possible with directory picker as it requires interaction)
     // So we just sync whenever history is opened
     useEffect(() => {
         if (isHistoryOpen && directoryHandle) {
-            syncLibrary();
+            syncLibrary(directoryHandle, {
+                googleToken,
+                auditCloudRegistry,
+                loadCloudMetadata
+            });
         }
-    }, [isHistoryOpen]);
+    }, [isHistoryOpen, directoryHandle]); // Reduced dependencies to break loop
 
     const stopRecording = () => {
         if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
