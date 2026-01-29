@@ -2,16 +2,26 @@ import React from 'react';
 import { BACKGROUND_PRESETS } from '../../constants/backgrounds';
 
 export const ControlBar = ({
+    screenStream,
+    cameraStream,
+    audioStream,
+    activeBg,
     isRecording,
-    screenStream, toggleScreen,
-    cameraStream, toggleCamera,
-    audioStream, toggleMic,
-    activeBg, setActiveBg,
-    isBgPanelOpen, setIsBgPanelOpen,
-    startRecording, stopRecording,
-    webcamShape, setWebcamShape,
-    webcamScale, setWebcamScale,
-    screenScale, setScreenScale
+    isBgPanelOpen,
+    setIsBgPanelOpen,
+    webcamShape,
+    setWebcamShape,
+    webcamScale,
+    setWebcamScale,
+    screenScale,
+    setScreenScale,
+    toggleScreen,
+    toggleCamera,
+    toggleMic,
+    setActiveBg,
+    startRecording,
+    stopRecording,
+    handleStopAll
 }) => {
     return (
         <div className="control-bar-container">
@@ -131,7 +141,7 @@ export const ControlBar = ({
                             {isRecording ? 'Stop' : 'Start Recording'}
                         </button>
                     )}
-                    <button className="btn-icon-bg" onClick={stopAll} title="Reset">✕</button>
+                    <button className="btn-icon-bg" onClick={handleStopAll} title="Reset">✕</button>
                 </div>
             </div>
         </div>
