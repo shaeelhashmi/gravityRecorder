@@ -1,28 +1,23 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { mediaManager } from '../utils/MediaManager';
 import { storageManager } from '../utils/StorageManager';
-
-const BACKGROUND_PRESETS = [
-    { id: 'none', name: 'None', colors: null },
-    { id: 'midnight', name: 'Midnight Dream', colors: ['#0f172a', '#1e1b4b', '#312e81'] },
-    { id: 'aurora', name: 'Aurora Flare', colors: ['#064e3b', '#065f46', '#0891b2'] },
-    { id: 'sunset', name: 'Sunset Vibe', colors: ['#7c2d12', '#991b1b', '#f59e0b'] },
-    { id: 'cyber', name: 'Cyber Glow', colors: ['#4c1d95', '#701a75', '#2563eb'] },
-    { id: 'rose', name: 'Dusty Rose', colors: ['#881337', '#9f1239', '#fb7185'] },
-    { id: 'ocean', name: 'Deep Ocean', colors: ['#1e3a8a', '#1d4ed8', '#0ea5e9'] },
-    { id: 'mesh', name: 'Mesh Palette', colors: ['#4338ca', '#db2777', '#f59e0b'] },
-];
+import { BACKGROUND_PRESETS } from '../constants/backgrounds';
+import { getFileSignature } from '../utils/FileUtils';
+import { useStreams } from '../hooks/useStreams';
 
 const ScreenRecorder = () => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [status, setStatus] = useState('idle');
+
+    // Refs for Media & Stage
     const canvasRef = useRef(null);
     const screenVideoRef = useRef(null);
     const cameraVideoRef = useRef(null);
 
-    const [isRecording, setIsRecording] = useState(false);
-    const [status, setStatus] = useState('idle');
-    const [screenStream, setScreenStream] = useState(null);
-    const [audioStream, setAudioStream] = useState(null);
-    const [cameraStream, setCameraStream] = useState(null);
+    const {
+        screenStream, audioStream, cameraStream,
+        toggleScreen, toggleMic, toggleCamera, stopAll: stopStreams
+    } = useStreams(screenVideoRef, cameraVideoRef, setStatus);
     const [webcamShape, setWebcamShape] = useState('circle'); // circle, rounded-rect, square
     const [webcamScale, setWebcamScale] = useState(0.40); // Default to Medium (0.40)
     const [activeBg, setActiveBg] = useState('none');
@@ -68,77 +63,16 @@ const ScreenRecorder = () => {
         cameraVideoRef.current.playsInline = true;
 
         return () => {
-            stopAll();
+            handleStopAll();
         };
     }, []);
 
-    const toggleScreen = async () => {
-        if (screenStream) {
-            screenStream.getTracks().forEach(track => track.stop());
-            setScreenStream(null);
-            screenVideoRef.current.srcObject = null;
-            return;
-        }
-
-        try {
-            const stream = await mediaManager.getScreenStream();
-            setScreenStream(stream);
-            screenVideoRef.current.srcObject = stream;
-
-            // Explicitly play to ensure readyState progresses
-            await screenVideoRef.current.play().catch(e => console.warn('Screen video play delayed:', e));
-
-            stream.getVideoTracks()[0].onended = () => {
-                setScreenStream(null);
-                screenVideoRef.current.srcObject = null;
-            };
-
-            setStatus('ready');
-        } catch (err) {
-            console.error('Error starting screen stream:', err);
-            alert(`Could not acquire screen: ${err.message}`);
-        }
+    const handleStopAll = () => {
+        if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+        stopStreams();
     };
 
-    const toggleMic = async () => {
-        if (audioStream) {
-            audioStream.getTracks().forEach(track => track.stop());
-            setAudioStream(null);
-            return;
-        }
-
-        try {
-            const stream = await mediaManager.getAudioStream();
-            setAudioStream(stream);
-            setStatus('ready');
-        } catch (err) {
-            console.error('Error starting mic stream:', err);
-            alert(`Could not acquire microphone: ${err.message}`);
-        }
-    };
-
-    const toggleCamera = async () => {
-        if (cameraStream) {
-            cameraStream.getTracks().forEach(track => track.stop());
-            setCameraStream(null);
-            cameraVideoRef.current.srcObject = null;
-            return;
-        }
-
-        try {
-            const stream = await mediaManager.getCameraStream();
-            setCameraStream(stream);
-            cameraVideoRef.current.srcObject = stream;
-
-            // Explicitly play
-            await cameraVideoRef.current.play().catch(e => console.warn('Camera video play delayed:', e));
-
-            setStatus('ready');
-        } catch (err) {
-            console.error('Error starting camera stream:', err);
-            alert(`Could not acquire camera: ${err.message}`);
-        }
-    };
 
     const drawCanvas = () => {
         const canvas = canvasRef.current;
@@ -471,10 +405,6 @@ const ScreenRecorder = () => {
     };
 
     // --- Google Drive Sync & Metadata Logic ---
-
-    const getFileSignature = (file) => {
-        return `${file.size}_${file.lastModified}`;
-    };
 
     const loadCloudMetadata = async (dirHandle) => {
         try {
@@ -894,19 +824,6 @@ const ScreenRecorder = () => {
         setStatus('ready');
     };
 
-    const stopAll = () => {
-        if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
-
-        [screenStream, cameraStream, audioStream].forEach(s => {
-            if (s) s.getTracks().forEach(t => t.stop());
-        });
-
-        setScreenStream(null);
-        setCameraStream(null);
-        setAudioStream(null);
-        setStatus('idle');
-    };
 
     return (
         <div className="recorder-container">
@@ -1065,7 +982,7 @@ const ScreenRecorder = () => {
                                 {isRecording ? 'Stop' : 'Start Recording'}
                             </button>
                         )}
-                        <button className="btn-icon-bg" onClick={stopAll} title="Reset">✕</button>
+                        <button className="btn-icon-bg" onClick={handleStopAll} title="Reset">✕</button>
                     </div>
                 </div>
             </div>
