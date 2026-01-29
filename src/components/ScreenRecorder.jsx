@@ -5,6 +5,7 @@ import { BACKGROUND_PRESETS } from '../constants/backgrounds';
 import { getFileSignature } from '../utils/FileUtils';
 import { useStreams } from '../hooks/useStreams';
 import { useFileSystem } from '../hooks/useFileSystem';
+import { useGoogleSync } from '../hooks/useGoogleSync';
 
 const ScreenRecorder = () => {
     const [isRecording, setIsRecording] = useState(false);
@@ -47,11 +48,11 @@ const ScreenRecorder = () => {
         generateThumbnail, getThumbnailUrl
     } = useFileSystem(showToast, setHighlightedFile);
 
-    // Google Drive Sync State
-    const [googleToken, setGoogleToken] = useState(null);
-    const [cloudUser, setCloudUser] = useState({ isLoggedIn: false, profile: null });
-    const [cloudRegistry, setCloudRegistry] = useState({}); // signature -> { driveId, shareLink }
-    const [uploadProgress, setUploadProgress] = useState({}); // filename -> percentage
+    const {
+        googleToken, cloudUser, cloudRegistry, uploadProgress,
+        handleGoogleAuth, handleLogout, uploadToDrive, auditCloudRegistry,
+        loadCloudMetadata, saveCloudMetadata
+    } = useGoogleSync(showToast, directoryHandle);
 
     // Position State (using Ref for 0-lag updates)
     const webcamPos = useRef({ x: 20, y: 410 }); // Default Bottom-Left (approx)
@@ -83,7 +84,6 @@ const ScreenRecorder = () => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
         stopStreams();
     };
-
 
     const drawCanvas = () => {
         const canvas = canvasRef.current;
@@ -346,284 +346,6 @@ const ScreenRecorder = () => {
         a.click();
     };
 
-
-    // --- Google Drive Sync & Metadata Logic ---
-
-    const loadCloudMetadata = useCallback(async (dirHandle) => {
-        try {
-            const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
-            const metaHandle = await assetsHandle.getFileHandle('metadata.json', { create: true });
-            const file = await metaHandle.getFile();
-            const text = await file.text();
-            if (text) {
-                const data = JSON.parse(text);
-                setCloudRegistry(data);
-                return data;
-            }
-        } catch (err) {
-            console.warn('Could not load metadata:', err);
-        }
-        return {};
-    }, []);
-
-    const saveCloudMetadata = useCallback(async (newMeta) => {
-        if (!directoryHandle) return;
-        try {
-            const assetsHandle = await directoryHandle.getDirectoryHandle('.recorder_assets', { create: true });
-            const metaHandle = await assetsHandle.getFileHandle('metadata.json', { create: true });
-            const writable = await metaHandle.createWritable();
-            await writable.write(JSON.stringify(newMeta));
-            await writable.close();
-            setCloudRegistry(newMeta);
-        } catch (err) {
-            console.error('Metadata save failed:', err);
-        }
-    }, [directoryHandle]);
-
-    const isAuditing = useRef(false);
-
-    const handleGoogleAuth = useCallback((onSuccess, forcePrompt = true, onFailure = () => { }, bypassCache = false) => {
-        // Only return cached token if we are NOT forcing a prompt or refresh, and not bypassing cache
-        if (!forcePrompt && googleToken && !bypassCache) return onSuccess(googleToken);
-
-        const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-            callback: (response) => {
-                if (response.access_token) {
-                    setGoogleToken(response.access_token);
-                    fetchUserProfile(response.access_token);
-                    onSuccess(response.access_token);
-                } else if (response.error) {
-                    console.error('Auth callback error:', response.error);
-                    onFailure(response.error);
-                }
-            },
-        });
-
-        // Request token. If prompt: '' it tries to refresh silently.
-        client.requestAccessToken({ prompt: forcePrompt ? 'select_account' : '' });
-    }, [googleToken]); // Removed fetchUserProfile dependency
-
-    const fetchUserProfile = useCallback(async (token) => {
-        try {
-            const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const profile = await resp.json();
-            const userData = { isLoggedIn: true, profile };
-            setCloudUser(userData);
-
-            // Persist to storage
-            await storageManager.setSetting('cloud_user_token', token);
-            await storageManager.setSetting('cloud_user_profile', profile);
-
-            // Trigger audit after login
-            auditCloudRegistry(token);
-        } catch (err) {
-            console.error('Profile fetch failed:', err);
-        }
-    }, [googleToken]); // Removed auditCloudRegistry dependency, added googleToken for stability
-
-    const handleLogout = useCallback(async () => {
-        setGoogleToken(null);
-        setCloudUser({ isLoggedIn: false, profile: null });
-        await storageManager.removeSetting('cloud_user_token');
-        await storageManager.removeSetting('cloud_user_profile');
-        showToast('Cloud Disconnected', 'You have been signed out', 'info');
-    }, [showToast]);
-
-    const auditCloudRegistry = useCallback(async (token = googleToken, registryToAudit = cloudRegistry) => {
-        if (!token || isAuditing.current) {
-            console.log('☁️ [Audit Skip] No Google Token found or already auditing.');
-            return;
-        }
-        if (Object.keys(registryToAudit).length === 0) {
-            console.log('☁️ [Audit Skip] Local registry is empty.');
-            return;
-        }
-
-        isAuditing.current = true;
-
-        console.log('☁️ [Audit] Initiating Batch Call to Google Drive...', {
-            apiUrl: 'https://www.googleapis.com/drive/v3/files',
-            localItemsCount: Object.keys(registryToAudit).length
-        });
-
-        try {
-            const query = encodeURIComponent("trashed = false");
-            const url = `https://www.googleapis.com/drive/v3/files?pageSize=1000&q=${query}&fields=files(id)`;
-
-            console.log('☁️ [Audit] Fetching:', url);
-
-            const resp = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (resp.status === 401) {
-                console.warn('⚠️ [Audit] Token expired (401). Attempting silent re-auth...');
-                isAuditing.current = false; // Reset to allow the retry call
-                handleGoogleAuth((newToken) => {
-                    console.log('🔄 [Audit] Token refreshed! Retrying...');
-                    auditCloudRegistry(newToken, registryToAudit);
-                }, false, (err) => {
-                    console.error('❌ [Audit] Silent re-auth failed. Logging out.', err);
-                    handleLogout();
-                }, true); // bypassCache = true
-                return;
-            }
-
-            if (!resp.ok) {
-                const errText = await resp.text();
-                console.error('❌ [Audit] Google API error:', resp.status, errText);
-                return;
-            }
-
-            const { files } = await resp.json();
-            const remoteIds = new Set((files || []).map(f => f.id));
-
-            console.log('☁️ [Audit] Results received from Google Drive:', {
-                foundOnDrive: remoteIds.size,
-                remoteFileIds: Array.from(remoteIds)
-            });
-
-            let cleaned = false;
-            const newRegistry = { ...registryToAudit };
-            let removedCount = 0;
-
-            for (const [sig, data] of Object.entries(newRegistry)) {
-                if (!remoteIds.has(data.driveId)) {
-                    console.log('🗑️ [Audit] Ghost link found! Pruning ID:', data.driveId);
-                    delete newRegistry[sig];
-                    cleaned = true;
-                    removedCount++;
-                }
-            }
-
-            if (cleaned) {
-                await saveCloudMetadata(newRegistry);
-                showToast('Cloud Sync Updated', `Pruned ${removedCount} dead links.`, 'info');
-                console.log(`✅ [Audit] Pruning complete. ${removedCount} stale entries removed.`);
-            } else {
-                console.log('✅ [Audit] Success. Everything in local registry matches Drive.');
-            }
-        } catch (err) {
-            console.error('❌ [Audit] Unexpected Failure:', err);
-        } finally {
-            isAuditing.current = false;
-        }
-    }, [googleToken, cloudRegistry, handleGoogleAuth, handleLogout, saveCloudMetadata, showToast]);
-
-    const uploadToDrive = async (fileHandle) => {
-        handleGoogleAuth(async (token) => {
-            const file = await fileHandle.getFile();
-            const signature = getFileSignature(file);
-            const fileName = file.name;
-
-            setUploadProgress(prev => ({ ...prev, [fileName]: 0 }));
-
-            try {
-                // 1. Create File Metadata
-                const metadata = {
-                    name: fileName,
-                    mimeType: file.type || 'video/webm',
-                };
-
-                // 2. Initiate Resumable Upload
-                let response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json; charset=UTF-8',
-                    },
-                    body: JSON.stringify(metadata),
-                });
-
-                if (response.status === 401) {
-                    console.warn('⚠️ [Upload] Token expired. Silent refreshing...');
-                    handleGoogleAuth(async (newToken) => {
-                        console.log('🔄 [Upload] Refreshed! Retrying...');
-                        uploadToDrive(fileHandle); // Recursive retry with NEW token
-                    }, false, () => {
-                        console.error('❌ [Upload] Refresh failed. Logging out.');
-                        handleLogout();
-                    }, true); // bypassCache = true
-                    return;
-                }
-
-                if (!response.ok) throw new Error('Failed to initiate upload');
-                const uploadUrl = response.headers.get('Location');
-
-                // 3. Upload Content
-                const uploadResponse = await fetch(uploadUrl, {
-                    method: 'PUT',
-                    body: file,
-                });
-
-                if (!uploadResponse.ok) throw new Error('Upload failed');
-                const driveFile = await uploadResponse.json();
-
-                // 4. Set Permissions (Make Public)
-                await fetch(`https://www.googleapis.com/drive/v3/files/${driveFile.id}/permissions`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        role: 'reader',
-                        type: 'anyone',
-                    }),
-                });
-
-                // 5. Get Share Link
-                const fileInfoResp = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFile.id}?fields=webViewLink`, {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                });
-                const { webViewLink } = await fileInfoResp.json();
-
-                // 6. Update Registry
-                const newMeta = { ...cloudRegistry, [signature]: { driveId: driveFile.id, shareLink: webViewLink } };
-                await saveCloudMetadata(newMeta);
-
-                showToast('Cloud Sync Success', `${fileName} is ready to share!`, 'success');
-            } catch (err) {
-                console.error('Upload failed:', err);
-                showToast('Cloud Sync Failed', 'Check your connection', 'error');
-            } finally {
-                setUploadProgress(prev => {
-                    const next = { ...prev };
-                    delete next[fileName];
-                    return next;
-                });
-            }
-        }, false);
-    };
-
-    // Load state from storage on mount
-    useEffect(() => {
-        const loadSavedState = async () => {
-            // 1. Workspace Handle
-            const savedHandle = await storageManager.getSetting('workspace_handle');
-            if (savedHandle) {
-                setDirectoryHandle(savedHandle);
-                const state = await savedHandle.queryPermission({ mode: 'readwrite' });
-                setIsHandleAuthorized(state === 'granted');
-            }
-
-            // 2. Cloud User
-            const savedToken = await storageManager.getSetting('cloud_user_token');
-            const savedProfile = await storageManager.getSetting('cloud_user_profile');
-            if (savedToken && savedProfile) {
-                setGoogleToken(savedToken);
-                setCloudUser({ isLoggedIn: true, profile: savedProfile });
-            }
-        };
-        loadSavedState();
-    }, []);
-
-
-
     // Sync on mount if handle exists (not possible with directory picker as it requires interaction)
     // So we just sync whenever history is opened
     useEffect(() => {
@@ -634,7 +356,7 @@ const ScreenRecorder = () => {
                 loadCloudMetadata
             });
         }
-    }, [isHistoryOpen, directoryHandle]); // Reduced dependencies to break loop
+    }, [isHistoryOpen, directoryHandle, googleToken, auditCloudRegistry, loadCloudMetadata]);
 
     const stopRecording = () => {
         if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
