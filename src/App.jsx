@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import ScreenRecorder from './components/ScreenRecorder';
 import LandingPage from './components/LandingPage/LandingPage';
+import { Analytics } from '@vercel/analytics/react';
 import './index.css';
 
 const NavigationHeader = () => {
@@ -48,6 +49,7 @@ function App() {
             </>
           } />
         </Routes>
+        <Analytics />
       </div>
     </Router>
   );
