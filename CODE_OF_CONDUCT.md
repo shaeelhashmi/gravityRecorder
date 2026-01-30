@@ -1,4 +1,4 @@
-# Gravity Studio Code of Conduct
+# Gravity Recorder Code of Conduct
 
 ## Our Commitment
 In the interest of fostering an open and welcoming environment, we as contributors and maintainers pledge to make participation in our project and our community a professional and respectful experience for everyone, regardless of nationality, level of experience, or technical background.

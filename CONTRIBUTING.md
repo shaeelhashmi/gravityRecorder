@@ -1,6 +1,6 @@
-# Contributing to Gravity Studio
+# Contributing to Gravity Recorder
 
-First off, thank you for considering contributing to Gravity Studio! It's people like you that make Gravity Studio such a great tool.
+First off, thank you for considering contributing to Gravity Recorder! It's people like you that make Gravity Recorder such a great tool.
 
 ### Code of Conduct
 
