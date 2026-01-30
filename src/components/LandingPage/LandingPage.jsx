@@ -121,24 +121,16 @@ const LandingPage = () => {
                     <h2 className="section-title">See it in <span className="text-gradient">Action</span></h2>
                     <div className="video-player-frame glass">
                         <div className="player-inner">
-                            {/* Replace src with actual tutorial video when available */}
-                            <video
-                                controls
-                                poster="https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&q=80&w=1280"
+                            <iframe
+                                width="100%"
+                                height="100%"
+                                src="https://www.youtube.com/embed/Rkdov0z35K8?modestbranding=1&rel=0&showinfo=0"
+                                title="Gravity Recorder Demo"
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
                                 className="showcase-video"
-                            >
-                                <source src="" type="video/mp4" />
-                                No tutorial video available yet.
-                            </video>
-                            <div className="video-overlay-premium" onClick={(e) => {
-                                const v = e.currentTarget.previousElementSibling;
-                                v.play();
-                                e.currentTarget.style.opacity = '0';
-                                e.currentTarget.style.pointerEvents = 'none';
-                            }}>
-                                <div className="play-btn-large">▶</div>
-                                <span>Watch the 2-minute walkthrough</span>
-                            </div>
+                            ></iframe>
                         </div>
                     </div>
                 </div>
