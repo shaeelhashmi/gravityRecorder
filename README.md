@@ -62,4 +62,4 @@ Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of con
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-Built with ❤️ by [Uzair Kath](https://github.com/uzairkath) and the OSS community.
+Built with ❤️ by [Uzair Kath](https://github.com/uzairkath)
