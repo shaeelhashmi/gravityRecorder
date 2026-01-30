@@ -1,12 +1,17 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import ScreenRecorder from './components/ScreenRecorder';
 import LandingPage from './components/LandingPage/LandingPage';
+import BlogList from './components/Blog/BlogList';
+import BlogPost from './components/Blog/BlogPost';
 import { Analytics } from '@vercel/analytics/react';
 import './index.css';
 
 const NavigationHeader = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isBlogPage = location.pathname.startsWith('/blog');
+
   return (
     <header style={{
       position: 'absolute',
@@ -29,7 +34,7 @@ const NavigationHeader = () => {
         fontWeight: 'bold',
         cursor: 'pointer'
       }} onClick={() => navigate('/')}>G</div>
-      <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Gravity Recorder</h1>
+      <h1 style={{ fontSize: '1.25rem', fontWeight: 700, marginRight: '1rem' }}>Gravity Recorder</h1>
     </header>
   );
 };
@@ -46,6 +51,18 @@ function App() {
               <main>
                 <ScreenRecorder />
               </main>
+            </>
+          } />
+          <Route path="/blog" element={
+            <>
+              <NavigationHeader />
+              <BlogList />
+            </>
+          } />
+          <Route path="/blog/:slug" element={
+            <>
+              <NavigationHeader />
+              <BlogPost />
             </>
           } />
         </Routes>

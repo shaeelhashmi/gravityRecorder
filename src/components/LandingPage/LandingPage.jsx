@@ -19,6 +19,7 @@ const LandingPage = () => {
                 <div className="nav-links">
                     <a href="#features">Features</a>
                     <a href="#showcase">Showcase</a>
+                    <a href="/blog" onClick={(e) => { e.preventDefault(); navigate('/blog'); }}>Blog</a>
                     <button className="btn btn-primary btn-sm" onClick={() => navigate('/recorder')}>Launch App</button>
                 </div>
             </nav>
