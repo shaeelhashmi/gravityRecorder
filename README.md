@@ -1,8 +1,9 @@
 # 🌌 Gravity Studio
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-blue.svg)](CONTRIBUTING.md)
+[![Visit Website](https://img.shields.io/badge/Visit-gravityrecorder.com-purple.svg)](https://gravityrecorder.com)
 
 **Gravity Studio** is a premium, local-first screen recording application designed for creators who value privacy, performance, and high-end aesthetics. 
 
