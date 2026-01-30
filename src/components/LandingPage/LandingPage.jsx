@@ -19,6 +19,7 @@ const LandingPage = () => {
                 <div className="nav-links">
                     <a href="#features">Features</a>
                     <a href="#showcase">Showcase</a>
+                    <span className="nav-link" style={{ cursor: 'pointer' }} onClick={() => navigate('/blog')}>Blog</span>
                     <button className="btn btn-primary btn-sm" onClick={() => navigate('/recorder')}>Launch App</button>
                 </div>
             </nav>

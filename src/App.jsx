@@ -5,6 +5,9 @@ import LandingPage from './components/LandingPage/LandingPage';
 import { Analytics } from '@vercel/analytics/react';
 import './index.css';
 
+import BlogList from './components/Blog/BlogList';
+import BlogPost from './components/Blog/BlogPost';
+
 const NavigationHeader = () => {
   const navigate = useNavigate();
   return (
@@ -29,7 +32,12 @@ const NavigationHeader = () => {
         fontWeight: 'bold',
         cursor: 'pointer'
       }} onClick={() => navigate('/')}>G</div>
-      <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Gravity Recorder</h1>
+      <h1
+        style={{ fontSize: '1.25rem', fontWeight: 700, cursor: 'pointer' }}
+        onClick={() => navigate('/')}
+      >
+        Gravity Recorder
+      </h1>
     </header>
   );
 };
@@ -46,6 +54,18 @@ function App() {
               <main>
                 <ScreenRecorder />
               </main>
+            </>
+          } />
+          <Route path="/blog" element={
+            <>
+              <NavigationHeader />
+              <BlogList />
+            </>
+          } />
+          <Route path="/blog/:slug" element={
+            <>
+              <NavigationHeader />
+              <BlogPost />
             </>
           } />
         </Routes>
