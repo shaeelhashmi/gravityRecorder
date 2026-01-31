@@ -4,6 +4,7 @@ import ScreenRecorder from './components/ScreenRecorder';
 import LandingPage from './components/LandingPage/LandingPage';
 import BlogList from './components/Blog/BlogList';
 import BlogPost from './components/Blog/BlogPost';
+import ComparisonPage from './components/Marketing/ComparisonPage';
 import { Analytics } from '@vercel/analytics/react';
 import './index.css';
 
@@ -63,6 +64,12 @@ function App() {
             <>
               <NavigationHeader />
               <BlogPost />
+            </>
+          } />
+          <Route path="/:competitor-alternative" element={
+            <>
+              <NavigationHeader />
+              <ComparisonPage />
             </>
           } />
         </Routes>
