@@ -224,7 +224,38 @@ export const useFileSystem = (showToast, setHighlightedFile) => {
             syncLibrary();
         } catch (err) {
             console.error('Rename failed:', err);
-            alert(`Rename failed: ${err.message}`);
+            showToast('Error', `Rename failed: ${err.message}`, 'error');
+        }
+    };
+
+    const deleteFile = async (file) => {
+        if (!window.confirm(`Are you sure you want to permanently delete "${file.name}"?`)) return;
+
+        try {
+            // 1. Delete the Video File
+            await directoryHandle.removeEntry(file.name);
+
+            // 2. Cleanup Thumbnail
+            try {
+                const assetsHandle = await directoryHandle.getDirectoryHandle('.recorder_assets');
+                const thumbName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                await assetsHandle.removeEntry(thumbName);
+
+                if (thumbnailMap[file.name]) {
+                    URL.revokeObjectURL(thumbnailMap[file.name]);
+                    setThumbnailMap(prev => {
+                        const next = { ...prev };
+                        delete next[file.name];
+                        return next;
+                    });
+                }
+            } catch { /* No thumbnail to cleanup */ }
+
+            showToast('Success', 'Recording deleted from disk', 'success');
+            syncLibrary();
+        } catch (err) {
+            console.error('Delete failed:', err);
+            showToast('Error', 'Failed to delete file', 'error');
         }
     };
 
@@ -237,7 +268,7 @@ export const useFileSystem = (showToast, setHighlightedFile) => {
         newName, setNewName,
         selectedVideoUrl, setSelectedVideoUrl,
         connectFolder, resumeSync, syncLibrary,
-        playVideo, startRename, handleRename,
+        playVideo, startRename, handleRename, deleteFile,
         generateThumbnail, getThumbnailUrl
     };
 };

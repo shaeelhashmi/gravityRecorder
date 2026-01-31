@@ -516,6 +516,30 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.btn-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-card:hover .btn-delete {
+  opacity: 1;
+}
+
+.btn-delete:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  transform: scale(1.1);
+}
+
 .rename-actions {
   display: flex;
   gap: 0.3rem;

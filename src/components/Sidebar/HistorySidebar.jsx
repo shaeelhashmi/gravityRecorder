@@ -23,7 +23,8 @@ export const HistorySidebar = ({
     uploadProgress,
     cloudRegistry,
     uploadToDrive,
-    startRename
+    startRename,
+    deleteFile
 }) => {
     return (
         <div className={`sidebar ${isHistoryOpen ? 'open' : ''}`}>
@@ -154,6 +155,11 @@ export const HistorySidebar = ({
                                                             >☁️</button>
                                                         )}
                                                         <button className="btn-rename" onClick={e => startRename(e, file)} title="Rename">✎</button>
+                                                        <button
+                                                            className="btn-delete"
+                                                            onClick={e => { e.stopPropagation(); deleteFile(file); }}
+                                                            title="Delete Recording"
+                                                        >🗑️</button>
                                                     </div>
                                                 </div>
                                                 <span className="video-meta">{file.date} • {file.size}</span>

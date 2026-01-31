@@ -50,7 +50,7 @@ const ScreenRecorder = () => {
         newName, setNewName,
         selectedVideoUrl, setSelectedVideoUrl,
         connectFolder, resumeSync, syncLibrary,
-        playVideo, startRename, handleRename,
+        playVideo, startRename, handleRename, deleteFile,
         generateThumbnail, getThumbnailUrl
     } = useFileSystem(showToast, setHighlightedFile);
 
@@ -374,6 +374,7 @@ const ScreenRecorder = () => {
                 cloudRegistry={cloudRegistry}
                 uploadToDrive={uploadToDrive}
                 startRename={startRename}
+                deleteFile={deleteFile}
             />
 
             <VideoPlayerModal
