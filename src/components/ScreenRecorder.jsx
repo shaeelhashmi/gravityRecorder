@@ -12,6 +12,7 @@ import { HistorySidebar } from './Sidebar/HistorySidebar';
 import { PreviewStage } from './Preview/PreviewStage';
 import { Toast } from './Notifications/Toast';
 import { VideoPlayerModal } from './Modals/VideoPlayerModal';
+import SaveRecordingModal from './Modals/SaveRecordingModal';
 
 const ScreenRecorder = () => {
     // Refs for Media & Stage
@@ -33,6 +34,7 @@ const ScreenRecorder = () => {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [toast, setToast] = useState(null);
     const [highlightedFile, setHighlightedFile] = useState(null);
+    const [pendingRecording, setPendingRecording] = useState(null);
 
     const showToast = useCallback((title, message, type = 'info') => {
         setToast({ title, message, type });
@@ -63,9 +65,42 @@ const ScreenRecorder = () => {
     } = useRecording({
         screenStream, audioStream, cameraStream,
         activeBg, canvasRef,
-        directoryHandle, syncLibrary, generateThumbnail,
-        showToast, setHighlightedFile
+        onComplete: (blob, mimeType) => setPendingRecording({ blob, mimeType })
     });
+
+    const handleSaveRecording = async (blob, fileName) => {
+        if (directoryHandle) {
+            try {
+                const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+
+                await syncLibrary(directoryHandle);
+                await generateThumbnail(blob, fileName, directoryHandle);
+
+                showToast(`Saved to ${directoryHandle.name}`, fileName, 'success');
+                setHighlightedFile(fileName);
+                setTimeout(() => setHighlightedFile(null), 5000);
+            } catch (err) {
+                console.error('Save failed:', err);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                showToast('Direct save failed', 'Download triggered as fallback', 'error');
+            }
+        } else {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            showToast('Recording Saved', 'Check your downloads folder', 'success');
+        }
+        setPendingRecording(null);
+    };
 
     // Position State (using Ref for 0-lag updates)
     const webcamPos = useRef({ x: 20, y: 410 });
@@ -346,6 +381,13 @@ const ScreenRecorder = () => {
             <Toast
                 toast={toast}
                 onClose={() => setToast(null)}
+            />
+
+            <SaveRecordingModal
+                blob={pendingRecording?.blob}
+                mimeType={pendingRecording?.mimeType}
+                onSave={handleSaveRecording}
+                onDiscard={() => setPendingRecording(null)}
             />
         </div>
     );

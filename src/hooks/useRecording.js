@@ -7,23 +7,11 @@ export const useRecording = ({
     cameraStream,
     activeBg,
     canvasRef,
-    directoryHandle,
-    syncLibrary,
-    generateThumbnail,
-    showToast,
-    setHighlightedFile
+    onComplete
 }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [status, setStatus] = useState('idle');
     const mediaRecorderRef = useRef(null);
-
-    const triggerDownload = useCallback((blob, fileName) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-    }, []);
 
     const startRecording = useCallback(async () => {
         try {
@@ -66,32 +54,9 @@ export const useRecording = ({
                 const chunks = await storageManager.getAllChunks();
                 if (chunks.length > 0) {
                     const blob = new Blob(chunks, { type: mimeType });
-                    const fileName = `recording-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
-
-                    // If folder is connected, save directly
-                    if (directoryHandle) {
-                        try {
-                            const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-                            const writable = await fileHandle.createWritable();
-                            await writable.write(blob);
-                            await writable.close();
-                            syncLibrary(directoryHandle); // Refresh
-
-                            // Generate Thumbnail after save
-                            generateThumbnail(blob, fileName, directoryHandle);
-
-                            // Trigger success signals
-                            showToast(`Saved to ${directoryHandle.name}`, fileName, 'success');
-                            setHighlightedFile(fileName);
-                            setTimeout(() => setHighlightedFile(null), 5000); // Clear highlight after 5s
-                        } catch (err) {
-                            console.error('Direct save failed:', err);
-                            triggerDownload(blob, fileName);
-                            showToast('Direct save failed', 'Download triggered as fallback', 'error');
-                        }
-                    } else {
-                        triggerDownload(blob, fileName);
-                        showToast('Recording Saved', 'Check your downloads folder', 'success');
+                    // Instead of saving, we pass it back to the component
+                    if (onComplete) {
+                        onComplete(blob, mimeType);
                     }
                 }
                 await storageManager.clearStorage();
@@ -104,7 +69,7 @@ export const useRecording = ({
             console.error('Recording start failed:', err);
             setStatus('error');
         }
-    }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, directoryHandle, syncLibrary, generateThumbnail, showToast, setHighlightedFile, triggerDownload]);
+    }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, onComplete]);
 
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
