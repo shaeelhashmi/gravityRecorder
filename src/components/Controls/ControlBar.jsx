@@ -78,7 +78,7 @@ export const ControlBar = ({
                                             border: activeBg === p.id ? '2px solid var(--primary)' : '1px solid var(--glass-border)',
                                             overflow: 'hidden'
                                         }}>
-                                        {p.id === 'none' && <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>None</span>}
+                                        {p.id === 'none' && <span style={{ fontSize: '0.6rem', opacity: 0.8, fontWeight: 700 }}>Black</span>}
                                     </button>
                                 ))}
                             </div>
@@ -126,18 +126,19 @@ export const ControlBar = ({
                         {audioStream ? '● Mic' : 'Mic'}
                     </button>
                     <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
-                    <button className={`btn-pill ${activeBg !== 'none' ? 'active' : ''}`}
+                    <button className={`btn-pill ${activeBg !== 'none' || screenScale !== 1.0 ? 'active' : ''}`}
                         onClick={() => {
                             setIsBgPanelOpen(!isBgPanelOpen);
                         }} disabled={isRecording}>
-                        {activeBg !== 'none' ? '🎨 Styled' : '🎨 BG'}
+                        {activeBg !== 'none' || screenScale !== 1.0 ? '🎨 Styled' : '🎨 BG'}
                     </button>
                 </div>
 
                 <div className="main-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    {(screenStream || cameraStream) && (
+                    {(screenStream || cameraStream || activeBg !== 'none') && (
                         <button className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
-                            onClick={isRecording ? stopRecording : startRecording}>
+                            onClick={isRecording ? stopRecording : startRecording}
+                            disabled={isRecording === false && !screenStream && !cameraStream}>
                             {isRecording ? 'Stop' : 'Start Recording'}
                         </button>
                     )}

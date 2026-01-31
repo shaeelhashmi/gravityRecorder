@@ -127,6 +127,9 @@ const ScreenRecorder = () => {
         if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
         resetRecording();
         stopStreams();
+        setActiveBg('none');
+        setScreenScale(1.0);
+        setIsBgPanelOpen(false);
     };
 
     const drawCanvas = useCallback(() => {
