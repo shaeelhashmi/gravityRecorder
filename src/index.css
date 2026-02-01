@@ -705,6 +705,14 @@ body {
   color: var(--text-muted);
 }
 
+[data-theme='light'] .toast-title {
+  color: #000000;
+}
+
+[data-theme='light'] .toast-message {
+  color: #475569;
+}
+
 /* Cloud Sync UI */
 .video-actions {
   display: flex;
@@ -744,6 +752,12 @@ body {
   background: rgba(46, 204, 113, 0.1);
   border-color: var(--success);
   color: var(--success);
+}
+
+[data-theme='light'] .btn-cloud.active {
+  background: #dcfce7;
+  border-color: #22c55e;
+  color: #15803d !important;
 }
 
 .upload-loader {
