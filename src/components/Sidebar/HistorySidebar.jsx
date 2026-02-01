@@ -37,7 +37,7 @@ export const HistorySidebar = ({
             </div>
 
             {/* Cloud Hub Section */}
-            <div className="cloud-hub glass-card" style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.02)' }}>
+            <div className="cloud-hub glass-card" style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--glass)' }}>
                 {!cloudUser.isLoggedIn ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -109,11 +109,11 @@ export const HistorySidebar = ({
                                 <div key={file.name}
                                     className={`video-card ${highlightedFile === file.name ? 'highlight-success' : ''}`}
                                     onClick={() => playVideo(file.handle)}>
-                                    <div className="video-thumb">
+                                    <div className="video-thumb" style={{ background: '#000' }}>
                                         {thumbnailMap[file.name] ? (
                                             <img src={thumbnailMap[file.name]} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" />
                                         ) : (
-                                            <span style={{ fontSize: '1.5rem' }}>▶</span>
+                                            <span style={{ fontSize: '1.5rem', color: '#fff' }}>▶</span>
                                         )}
                                     </div>
                                     <div className="video-info">

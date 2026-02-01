@@ -17,7 +17,7 @@
     font-weight: 800;
     letter-spacing: -0.04em;
     margin-bottom: 1rem;
-    background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+    background: linear-gradient(135deg, var(--text-main) 0%, var(--primary) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -25,7 +25,7 @@
 
 .blog-subtitle {
     font-size: 1.25rem;
-    color: #94a3b8;
+    color: var(--text-muted);
     max-width: 600px;
     margin: 0 auto;
 }
@@ -38,8 +38,8 @@
 }
 
 .blog-card {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--bg-card);
+    border: 1px solid var(--glass-border);
     border-radius: 20px;
     overflow: hidden;
     text-decoration: none;
@@ -87,14 +87,14 @@
 .blog-card-title {
     font-size: 1.3rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--text-main);
     margin-bottom: 1rem;
     line-height: 1.4;
 }
 
 .blog-card-excerpt {
     font-size: 0.95rem;
-    color: #94a3b8;
+    color: var(--text-muted);
     line-height: 1.6;
     margin-bottom: 2rem;
     display: -webkit-box;
@@ -107,7 +107,7 @@
 .blog-card-link {
     font-size: 0.9rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--primary);
     margin-top: auto;
 }
 
@@ -125,7 +125,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    color: #94a3b8;
+    color: var(--text-muted);
     text-decoration: none;
     font-size: 0.9rem;
     margin-bottom: 3rem;
@@ -133,7 +133,7 @@
 }
 
 .back-link:hover {
-    color: #fff;
+    color: var(--primary);
 }
 
 .post-header {
@@ -177,7 +177,7 @@
     display: flex;
     align-items: center;
     gap: 2rem;
-    color: #64748b;
+    color: var(--text-muted);
     font-size: 0.95rem;
 }
 
@@ -197,13 +197,13 @@
 .post-content {
     font-size: 1.2rem;
     line-height: 1.8;
-    color: #cbd5e1;
+    color: var(--text-main);
 }
 
 .post-content h2 {
     font-size: 2rem;
     font-weight: 700;
-    color: #fff;
+    color: var(--text-main);
     margin: 3rem 0 1.5rem;
 }
 
@@ -212,7 +212,7 @@
 }
 
 .post-content strong {
-    color: #fff;
+    color: var(--text-main);
 }
 
 .post-content ul {
@@ -238,14 +238,14 @@
     font-size: 2.25rem;
     font-weight: 800;
     margin: 0;
-    background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+    background: linear-gradient(135deg, var(--text-main) 0%, var(--primary) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
 .post-cta p {
-    color: #94a3b8;
+    color: var(--text-muted);
     margin: 0;
     font-size: 1.1rem;
     max-width: 500px;

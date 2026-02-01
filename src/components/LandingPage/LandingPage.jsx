@@ -1,5 +1,5 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../ThemeToggle/ThemeToggle';
 import './LandingPage.css';
 
 const LandingPage = () => {
@@ -13,14 +13,15 @@ const LandingPage = () => {
             {/* Navigation Bar */}
             <nav className="landing-nav">
                 <div className="nav-logo">
-                    <div className="logo-icon">G</div>
+                    <div className="logo-icon" style={{ color: 'white' }}>G</div>
                     <span>Gravity Recorder</span>
                 </div>
                 <div className="nav-links">
                     <a href="#features">Features</a>
                     <a href="#showcase">Showcase</a>
                     <a href="/blog" onClick={(e) => { e.preventDefault(); navigate('/blog'); }}>Blog</a>
-                    <button className="btn btn-primary btn-sm" onClick={() => navigate('/recorder')}>Launch App</button>
+                    <button className="btn btn-primary btn-sm" style={{ color: 'white' }} onClick={() => navigate('/recorder')}>Launch App</button>
+                    <ThemeToggle />
                 </div>
             </nav>
 
@@ -154,7 +155,7 @@ const LandingPage = () => {
 
             <footer className="studio-footer">
                 <div className="footer-content">
-                    <div className="footer-logo">G</div>
+                    <div className="footer-logo" style={{ color: 'var(--text-main)', background: 'var(--glass)' }}>G</div>
                     <p>© 2026 Gravity Labs. Built with ❤️ for the community.</p>
                 </div>
             </footer>

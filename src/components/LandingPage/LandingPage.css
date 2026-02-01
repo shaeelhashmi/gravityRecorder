@@ -2,11 +2,12 @@
 
 .landing-container {
     min-height: 100vh;
-    background: #050505;
-    color: #ffffff;
+    background: var(--bg-deep);
+    color: var(--text-main);
     overflow-x: hidden;
     font-family: 'Outfit', 'Inter', system-ui, sans-serif;
     position: relative;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Mesh Gradient Background */
@@ -47,9 +48,9 @@
     align-items: center;
     padding: 1.5rem 4rem;
     z-index: 100;
-    background: rgba(5, 5, 5, 0.3);
+    background: var(--nav-bg);
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--glass-border);
 }
 
 .nav-logo {
@@ -161,7 +162,7 @@
 
 .hero-subtitle {
     font-size: 1.35rem;
-    color: #94a3b8;
+    color: var(--text-muted);
     max-width: 600px;
     line-height: 1.6;
     margin-bottom: 3.5rem;
@@ -439,8 +440,8 @@
     padding: 3.5rem;
     border-radius: 32px;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--glass-border);
+    background: var(--bg-card);
 }
 
 .feature-card-premium:hover {
@@ -561,7 +562,7 @@
 
 .github-logo {
     margin-bottom: 2.5rem;
-    color: #fff;
+    color: var(--text-main);
     opacity: 0.8;
 }
 
@@ -569,11 +570,12 @@
     font-size: 3rem;
     font-weight: 800;
     margin-bottom: 1.5rem;
+    color: var(--text-main);
 }
 
 .manifesto-card p {
     font-size: 1.3rem;
-    color: #94a3b8;
+    color: var(--text-muted);
     max-width: 700px;
     margin: 0 auto 4rem;
     line-height: 1.6;

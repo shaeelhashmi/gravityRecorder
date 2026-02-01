@@ -11,7 +11,7 @@ export const Toast = ({ toast, onClose }) => {
                     <span className="toast-message">{toast.message}</span>
                 </div>
                 <button
-                    style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer', opacity: 0.5 }}
                     onClick={onClose}
                 >✕</button>
             </div>

@@ -109,7 +109,7 @@ export const ControlBar = ({
             )}
 
             <div className="control-bar">
-                <div className="source-toggles" style={{ display: 'flex', gap: '0.5rem', background: 'var(--glass)', padding: '0.4rem', borderRadius: '100px', border: '1px solid var(--glass-border)' }}>
+                <div className="source-toggles">
                     <button className={`btn-pill ${screenStream ? 'active' : ''}`}
                         onClick={toggleScreen} disabled={isRecording}>
                         {screenStream ? '● Screen' : 'Screen'}
@@ -125,7 +125,7 @@ export const ControlBar = ({
                         onClick={toggleMic} disabled={isRecording}>
                         {audioStream ? '● Mic' : 'Mic'}
                     </button>
-                    <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
+                    <div className="vertical-divider" style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
                     <button className={`btn-pill ${activeBg !== 'none' || screenScale !== 1.0 ? 'active' : ''}`}
                         onClick={() => {
                             setIsBgPanelOpen(!isBgPanelOpen);
@@ -134,7 +134,7 @@ export const ControlBar = ({
                     </button>
                 </div>
 
-                <div className="main-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div className="main-actions">
                     {(screenStream || cameraStream || activeBg !== 'none') && (
                         <button className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
                             onClick={isRecording ? stopRecording : startRecording}
