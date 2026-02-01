@@ -10,6 +10,7 @@ export const useRecording = ({
     onComplete
 }) => {
     const [isRecording, setIsRecording] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
     const [status, setStatus] = useState('idle');
     const mediaRecorderRef = useRef(null);
 
@@ -71,11 +72,28 @@ export const useRecording = ({
         }
     }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, onComplete]);
 
+    const pauseRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.pause();
+            setIsPaused(true);
+            setStatus('paused');
+        }
+    }, []);
+
+    const resumeRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+            mediaRecorderRef.current.resume();
+            setIsPaused(false);
+            setStatus('recording');
+        }
+    }, []);
+
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
         }
         setIsRecording(false);
+        setIsPaused(false);
         setStatus('ready');
     }, []);
 
@@ -84,14 +102,18 @@ export const useRecording = ({
             mediaRecorderRef.current.stop();
         }
         setIsRecording(false);
+        setIsPaused(false);
         setStatus('idle');
     }, []);
 
     return {
         isRecording,
+        isPaused,
         status,
         setStatus,
         startRecording,
+        pauseRecording,
+        resumeRecording,
         stopRecording,
         resetRecording,
         mediaRecorderRef

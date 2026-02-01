@@ -61,7 +61,7 @@ const ScreenRecorder = () => {
     } = useGoogleSync(showToast, directoryHandle);
 
     const {
-        isRecording, startRecording, stopRecording, resetRecording
+        isRecording, isPaused, startRecording, pauseRecording, resumeRecording, stopRecording, resetRecording
     } = useRecording({
         screenStream, audioStream, cameraStream,
         activeBg, canvasRef,
@@ -337,7 +337,10 @@ const ScreenRecorder = () => {
                 toggleCamera={toggleCamera}
                 toggleMic={toggleMic}
                 startRecording={startRecording}
+                pauseRecording={pauseRecording}
+                resumeRecording={resumeRecording}
                 stopRecording={stopRecording}
+                isPaused={isPaused}
                 handleStopAll={handleStopAll}
             />
 

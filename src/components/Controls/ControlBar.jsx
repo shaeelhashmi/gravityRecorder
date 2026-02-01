@@ -20,7 +20,10 @@ export const ControlBar = ({
     toggleMic,
     setActiveBg,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
+    isPaused,
     handleStopAll
 }) => {
     return (
@@ -136,11 +139,27 @@ export const ControlBar = ({
 
                 <div className="main-actions">
                     {(screenStream || cameraStream || activeBg !== 'none') && (
-                        <button className={`btn ${isRecording ? 'btn-danger' : 'btn-primary'}`}
-                            onClick={isRecording ? stopRecording : startRecording}
-                            disabled={isRecording === false && !screenStream && !cameraStream}>
-                            {isRecording ? 'Stop' : 'Start Recording'}
-                        </button>
+                        <>
+                            {!isRecording ? (
+                                <button className="btn btn-primary"
+                                    onClick={startRecording}
+                                    disabled={!screenStream && !cameraStream}>
+                                    Start Recording
+                                </button>
+                            ) : (
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button className={`btn ${isPaused ? 'btn-primary' : 'btn-outline'}`}
+                                        onClick={isPaused ? resumeRecording : pauseRecording}
+                                        style={{ minWidth: '100px', justifyContent: 'center' }}>
+                                        {isPaused ? '▶ Resume' : '⏸ Pause'}
+                                    </button>
+                                    <button className="btn btn-danger"
+                                        onClick={stopRecording}>
+                                        Stop
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                     <button className="btn-icon-bg" onClick={handleStopAll} title="Reset">✕</button>
                 </div>
