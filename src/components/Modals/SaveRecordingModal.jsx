@@ -42,10 +42,10 @@ const SaveRecordingModal = ({ blob, mimeType, onSave, onDiscard }) => {
                             style={{
                                 width: '100%',
                                 padding: '1rem 1.25rem',
-                                background: 'rgba(255,255,255,0.05)',
-                                border: '1px solid rgba(255,255,255,0.1)',
+                                background: 'var(--glass)',
+                                border: '1px solid var(--glass-border)',
                                 borderRadius: '14px',
-                                color: '#fff',
+                                color: 'var(--text-main)',
                                 fontSize: '1rem',
                                 outline: 'none',
                                 transition: 'all 0.2s'
