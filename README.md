@@ -95,15 +95,73 @@ For those who want to test the latest experimental features or help us debug the
    npm install
    ```
 
-2. **Launch Development**:
+2. **Configure Environment Variables**:
+   - Copy the example environment file: `cp .env.example .env`
+   - Open `.env` and add your `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY`. (See "Google Cloud Setup" below).
+
+3. **Launch Development**:
    ```bash
    npm run dev
    ```
 
-3. **Production Build**:
-   ```bash
-   npm run build
-   ```
+---
+
+## 🔑 Google Cloud Setup (Step-by-Step)
+
+To enable the **Google Drive Cloud Sync** feature locally, you need to configure a Google Cloud Project. Follow these detailed steps:
+
+### 1. Create a Project
+- Go to the [Google Cloud Console](https://console.cloud.google.com/).
+- Click the project dropdown (top left) and select **New Project**.
+- Name it `Gravity Recorder` and click **Create**.
+
+### 2. Enable APIs
+- In the sidebar, go to **APIs & Services > Library**.
+- Search for **"Google Drive API"**.
+- Click on it and click **Enable**.
+
+### 3. Configure OAuth Consent Screen
+- Go to **APIs & Services > OAuth consent screen**.
+- Select **User Type: External** and click **Create**.
+- **App Information**: Enter `Gravity Recorder` as the app name and your email for support.
+- **Scopes**: 
+    - Click **Add or Remove Scopes**.
+    - Manually add this scope: `https://www.googleapis.com/auth/drive.file` (this allows Gravity to only see files it creates, maximizing user privacy).
+    - Add `.../auth/userinfo.profile` and `.../auth/userinfo.email` for the login feature.
+- **Test Users**: Add your own Gmail address so you can log in during development.
+
+### 4. Create Credentials
+- Go to **APIs & Services > Credentials**.
+
+#### Create OAuth Client ID (For Login/Sync):
+- Click **Create Credentials > OAuth client ID**.
+- Set **Application type** to `Web application`.
+- **Name**: `Gravity Local Dev`.
+- **Authorized JavaScript origins**: Add `http://localhost:5173`.
+- Click **Create** and copy your **Client ID**.
+
+#### Create API Key (For API access):
+- Click **Create Credentials > API Key**.
+- **Important**: To prevent unauthorized use, click **Edit API Key** and under **API restrictions**, select "Restrict key" and check **Google Drive API**.
+- Copy your **API Key**.
+
+### 5. Update your `.env`
+Paste both values into your `.env` file:
+```env
+VITE_GOOGLE_CLIENT_ID=your_id_here.apps.googleusercontent.com
+VITE_GOOGLE_API_KEY=your_key_here
+```
+
+---
+
+## 🏗️ Production Build
+
+To build the project for production and preview the optimized bundle:
+
+```bash
+npm run build
+npm run preview
+```
 
 ---
 
