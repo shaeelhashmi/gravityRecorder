@@ -7,6 +7,7 @@ export const useRecording = ({
     cameraStream,
     activeBg,
     canvasRef,
+    bitrate = 8000000,
     onComplete
 }) => {
     const [isRecording, setIsRecording] = useState(false);
@@ -44,7 +45,11 @@ export const useRecording = ({
             const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
             const mimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
 
-            const mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
+            const mediaRecorder = new MediaRecorder(recordingStream, {
+                mimeType,
+                videoBitsPerSecond: bitrate,
+                audioBitsPerSecond: 128000
+            });
             mediaRecorderRef.current = mediaRecorder;
 
             mediaRecorder.ondataavailable = (e) => {

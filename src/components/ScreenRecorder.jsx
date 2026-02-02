@@ -14,6 +14,12 @@ import { Toast } from './Notifications/Toast';
 import { VideoPlayerModal } from './Modals/VideoPlayerModal';
 import SaveRecordingModal from './Modals/SaveRecordingModal';
 
+const QUALITY_PRESETS = {
+    '720p': { width: 1280, height: 720, label: '720p (HD)', bitrate: 8000000 },
+    '1080p': { width: 1920, height: 1080, label: '1080p (FHD)', bitrate: 15000000 },
+    '1440p': { width: 2560, height: 1440, label: '1440p (2K)', bitrate: 25000000 }
+};
+
 const ScreenRecorder = () => {
     // Refs for Media & Stage
     const canvasRef = useRef(null);
@@ -30,6 +36,7 @@ const ScreenRecorder = () => {
     const [webcamScale, setWebcamScale] = useState(0.40);
     const [activeBg, setActiveBg] = useState('none');
     const [screenScale, setScreenScale] = useState(1.0);
+    const [recordingQuality, setRecordingQuality] = useState('1080p');
     const [isBgPanelOpen, setIsBgPanelOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [toast, setToast] = useState(null);
@@ -65,6 +72,7 @@ const ScreenRecorder = () => {
     } = useRecording({
         screenStream, audioStream, cameraStream,
         activeBg, canvasRef,
+        bitrate: QUALITY_PRESETS[recordingQuality].bitrate,
         onComplete: (blob, mimeType) => setPendingRecording({ blob, mimeType })
     });
 
@@ -143,12 +151,13 @@ const ScreenRecorder = () => {
                 return;
             }
 
-            canvas.width = 1280;
-            canvas.height = 720;
+            const quality = QUALITY_PRESETS[recordingQuality];
+            canvas.width = quality.width;
+            canvas.height = quality.height;
             const bubbleSize = canvas.height * webcamScale;
 
-            webcamPos.current.x = Math.max(0, Math.min(1280 - bubbleSize, webcamPos.current.x));
-            webcamPos.current.y = Math.max(0, Math.min(720 - bubbleSize, webcamPos.current.y));
+            webcamPos.current.x = Math.max(0, Math.min(canvas.width - bubbleSize, webcamPos.current.x));
+            webcamPos.current.y = Math.max(0, Math.min(canvas.height - bubbleSize, webcamPos.current.y));
             const { x, y } = webcamPos.current;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -233,34 +242,36 @@ const ScreenRecorder = () => {
             }
 
             if (cameraStream || screenStream || activeBg !== 'none') {
-                drawTimerRef.current = setTimeout(draw, 1000 / 30);
+                drawTimerRef.current = requestAnimationFrame(draw);
             }
         };
 
-        if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
-        draw();
-    }, [screenStream, cameraStream, activeBg, webcamScale, screenScale, webcamShape]);
+        if (drawTimerRef.current) cancelAnimationFrame(drawTimerRef.current);
+        drawTimerRef.current = requestAnimationFrame(draw);
+    }, [screenStream, cameraStream, activeBg, webcamScale, screenScale, webcamShape, recordingQuality]);
 
     useEffect(() => {
         if (cameraStream || screenStream || activeBg !== 'none') {
             drawCanvas();
         } else {
-            if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
+            if (drawTimerRef.current) cancelAnimationFrame(drawTimerRef.current);
         }
-    }, [cameraStream, screenStream, activeBg, webcamShape, webcamScale, screenScale, drawCanvas]);
+    }, [cameraStream, screenStream, activeBg, webcamShape, webcamScale, screenScale, recordingQuality, drawCanvas]);
 
     const getCanvasMousePos = (e) => {
         const canvas = canvasRef.current;
+        if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
         return {
-            x: (e.clientX - rect.left) * (1280 / rect.width),
-            y: (e.clientY - rect.top) * (720 / rect.height)
+            x: (e.clientX - rect.left) * (canvas.width / rect.width),
+            y: (e.clientY - rect.top) * (canvas.height / rect.height)
         };
     };
 
     const handleMouseDown = (e) => {
         const pos = getCanvasMousePos(e);
-        const bubbleSize = 720 * webcamScale;
+        const canvas = canvasRef.current;
+        const bubbleSize = canvas.height * webcamScale;
         const { x, y } = webcamPos.current;
         if (pos.x >= x && pos.x <= x + bubbleSize && pos.y >= y && pos.y <= y + bubbleSize) {
             isDragging.current = true;
@@ -333,9 +344,18 @@ const ScreenRecorder = () => {
                 setWebcamScale={setWebcamScale}
                 screenScale={screenScale}
                 setScreenScale={setScreenScale}
-                toggleScreen={toggleScreen}
-                toggleCamera={toggleCamera}
+                toggleScreen={() => {
+                    const q = QUALITY_PRESETS[recordingQuality];
+                    toggleScreen(q.width, q.height);
+                }}
+                toggleCamera={() => {
+                    const q = QUALITY_PRESETS[recordingQuality];
+                    toggleCamera(q.width, q.height);
+                }}
                 toggleMic={toggleMic}
+                recordingQuality={recordingQuality}
+                setRecordingQuality={setRecordingQuality}
+                qualityPresets={QUALITY_PRESETS}
                 startRecording={startRecording}
                 pauseRecording={pauseRecording}
                 resumeRecording={resumeRecording}

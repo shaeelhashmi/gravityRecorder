@@ -1,9 +1,11 @@
 class MediaManager {
-    async getScreenStream() {
+    async getScreenStream(width, height) {
         try {
             return await navigator.mediaDevices.getDisplayMedia({
                 video: {
-                    cursor: "always"
+                    cursor: "always",
+                    width: width ? { ideal: width } : undefined,
+                    height: height ? { ideal: height } : undefined
                 },
                 audio: true
             });
@@ -13,12 +15,12 @@ class MediaManager {
         }
     }
 
-    async getCameraStream() {
+    async getCameraStream(width, height) {
         try {
             return await navigator.mediaDevices.getUserMedia({
                 video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
+                    width: { ideal: width || 1280 },
+                    height: { ideal: height || 720 },
                     frameRate: { ideal: 30 }
                 },
                 audio: {

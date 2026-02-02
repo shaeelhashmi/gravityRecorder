@@ -19,6 +19,9 @@ export const ControlBar = ({
     toggleCamera,
     toggleMic,
     setActiveBg,
+    recordingQuality,
+    setRecordingQuality,
+    qualityPresets,
     startRecording,
     pauseRecording,
     resumeRecording,
@@ -26,6 +29,8 @@ export const ControlBar = ({
     isPaused,
     handleStopAll
 }) => {
+    const [isQualityOpen, setIsQualityOpen] = React.useState(false);
+
     return (
         <div className="control-bar-container">
             {cameraStream && !isRecording && (
@@ -111,6 +116,24 @@ export const ControlBar = ({
                 </div>
             )}
 
+            {isQualityOpen && !isRecording && (
+                <div className="camera-dropdown glass-card">
+                    <div className="setting-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <span className="setting-label">Recording Quality</span>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                {Object.entries(qualityPresets).map(([key, val]) => (
+                                    <button key={key} onClick={() => setRecordingQuality(key)}
+                                        className={`btn-small ${recordingQuality === key ? 'active' : ''}`}>
+                                        {val.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="control-bar">
                 <div className="source-toggles">
                     <button className={`btn-pill ${screenStream ? 'active' : ''}`}
@@ -132,8 +155,17 @@ export const ControlBar = ({
                     <button className={`btn-pill ${activeBg !== 'none' || screenScale !== 1.0 ? 'active' : ''}`}
                         onClick={() => {
                             setIsBgPanelOpen(!isBgPanelOpen);
+                            setIsQualityOpen(false);
                         }} disabled={isRecording}>
                         {activeBg !== 'none' || screenScale !== 1.0 ? '🎨 Styled' : '🎨 BG'}
+                    </button>
+                    <div className="vertical-divider" style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
+                    <button className={`btn-pill ${isQualityOpen ? 'active' : ''}`}
+                        onClick={() => {
+                            setIsQualityOpen(!isQualityOpen);
+                            setIsBgPanelOpen(false);
+                        }} disabled={isRecording}>
+                        ⚙️ {recordingQuality}
                     </button>
                 </div>
 

@@ -18,7 +18,7 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         setStatus('idle');
     }, [screenStream, cameraStream, audioStream, screenVideoRef, cameraVideoRef, setStatus]);
 
-    const toggleScreen = async () => {
+    const toggleScreen = async (width, height) => {
         if (screenStream) {
             screenStream.getTracks().forEach(track => track.stop());
             setScreenStream(null);
@@ -27,7 +27,7 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         }
 
         try {
-            const stream = await mediaManager.getScreenStream();
+            const stream = await mediaManager.getScreenStream(width, height);
             setScreenStream(stream);
             if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
 
@@ -63,7 +63,7 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         }
     };
 
-    const toggleCamera = async () => {
+    const toggleCamera = async (width, height) => {
         if (cameraStream) {
             cameraStream.getTracks().forEach(track => track.stop());
             setCameraStream(null);
@@ -72,7 +72,7 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         }
 
         try {
-            const stream = await mediaManager.getCameraStream();
+            const stream = await mediaManager.getCameraStream(width, height);
             setCameraStream(stream);
             if (cameraVideoRef.current) cameraVideoRef.current.srcObject = stream;
 

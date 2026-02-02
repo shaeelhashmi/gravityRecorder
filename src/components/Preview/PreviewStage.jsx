@@ -14,8 +14,6 @@ export const PreviewStage = ({
         <div className={`preview-wrapper ${isRecording ? 'is-recording' : ''}`}>
             <canvas
                 ref={canvasRef}
-                width={1280}
-                height={720}
                 className="preview-canvas"
                 style={{
                     display: (cameraStream || screenStream) ? 'block' : 'none',
