@@ -42,7 +42,7 @@ export const useRecording = ({
 
             const recordingStream = new MediaStream(tracks);
 
-            const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+            const types = ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm', 'video/mp4'];
             const mimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
 
             const mediaRecorder = new MediaRecorder(recordingStream, {
@@ -57,15 +57,16 @@ export const useRecording = ({
             };
 
             mediaRecorder.onstop = async () => {
+                setStatus('processing');
                 const chunks = await storageManager.getAllChunks();
                 if (chunks.length > 0) {
                     const blob = new Blob(chunks, { type: mimeType });
-                    // Instead of saving, we pass it back to the component
                     if (onComplete) {
                         onComplete(blob, mimeType);
                     }
                 }
                 await storageManager.clearStorage();
+                setStatus('ready');
             };
 
             mediaRecorder.start(1000);
@@ -75,7 +76,7 @@ export const useRecording = ({
             console.error('Recording start failed:', err);
             setStatus('error');
         }
-    }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, onComplete]);
+    }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, bitrate, onComplete]);
 
     const pauseRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {

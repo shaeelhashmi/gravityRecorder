@@ -15,9 +15,9 @@ import { VideoPlayerModal } from './Modals/VideoPlayerModal';
 import SaveRecordingModal from './Modals/SaveRecordingModal';
 
 const QUALITY_PRESETS = {
-    '720p': { width: 1280, height: 720, label: '720p (HD)', bitrate: 8000000 },
-    '1080p': { width: 1920, height: 1080, label: '1080p (FHD)', bitrate: 15000000 },
-    '1440p': { width: 2560, height: 1440, label: '1440p (2K)', bitrate: 25000000 }
+    '720p': { width: 1280, height: 720, label: '720p (HD)', bitrate: 4000000 },
+    '1080p': { width: 1920, height: 1080, label: '1080p (FHD)', bitrate: 8000000 },
+    '1440p': { width: 2560, height: 1440, label: '1440p (2K)', bitrate: 12000000 }
 };
 
 const ScreenRecorder = () => {
@@ -85,10 +85,14 @@ const ScreenRecorder = () => {
                 await writable.close();
 
                 await syncLibrary(directoryHandle);
-                await generateThumbnail(blob, fileName, directoryHandle);
-
                 showToast(`Saved to ${directoryHandle.name}`, fileName, 'success');
                 setHighlightedFile(fileName);
+
+                // Background thumbnail generation to prevent UI block
+                generateThumbnail(blob, fileName, directoryHandle).then(() => {
+                    syncLibrary(directoryHandle);
+                });
+
                 setTimeout(() => setHighlightedFile(null), 5000);
             } catch (err) {
                 console.error('Save failed:', err);
