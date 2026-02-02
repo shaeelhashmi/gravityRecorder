@@ -17,6 +17,11 @@ export const useRecording = ({
 
     const startRecording = useCallback(async () => {
         try {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                console.warn('Recording already in progress');
+                return;
+            }
+
             if (!screenStream && !cameraStream) {
                 alert('Enable Screen or Camera first');
                 return;

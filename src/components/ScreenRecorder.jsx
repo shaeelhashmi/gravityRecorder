@@ -42,6 +42,23 @@ const ScreenRecorder = () => {
     const [toast, setToast] = useState(null);
     const [highlightedFile, setHighlightedFile] = useState(null);
     const [pendingRecording, setPendingRecording] = useState(null);
+    const [countdown, setCountdown] = useState(null);
+
+    const handleStartWithCountdown = () => {
+        if (countdown !== null || isRecording || status === 'recording') return;
+
+        setCountdown(3);
+        const timer = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    startRecording();
+                    return null;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    };
 
     const showToast = useCallback((title, message, type = 'info') => {
         setToast({ title, message, type });
@@ -149,15 +166,18 @@ const ScreenRecorder = () => {
         if (!canvas) return;
         const ctx = canvas.getContext('2d', { alpha: false });
 
+        const quality = QUALITY_PRESETS[recordingQuality];
+        if (canvas.width !== quality.width || canvas.height !== quality.height) {
+            canvas.width = quality.width;
+            canvas.height = quality.height;
+        }
+
         const draw = () => {
             if (!screenStream && !cameraStream && activeBg === 'none') {
-                if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
+                if (drawTimerRef.current) cancelAnimationFrame(drawTimerRef.current);
                 return;
             }
 
-            const quality = QUALITY_PRESETS[recordingQuality];
-            canvas.width = quality.width;
-            canvas.height = quality.height;
             const bubbleSize = canvas.height * webcamScale;
 
             webcamPos.current.x = Math.max(0, Math.min(canvas.width - bubbleSize, webcamPos.current.x));
@@ -328,6 +348,7 @@ const ScreenRecorder = () => {
                 screenStream={screenStream}
                 isRecording={isRecording}
                 status={status}
+                countdown={countdown}
                 handleMouseDown={handleMouseDown}
                 handleMouseMove={handleMouseMove}
                 handleMouseUp={handleMouseUp}
@@ -360,7 +381,7 @@ const ScreenRecorder = () => {
                 recordingQuality={recordingQuality}
                 setRecordingQuality={setRecordingQuality}
                 qualityPresets={QUALITY_PRESETS}
-                startRecording={startRecording}
+                startRecording={handleStartWithCountdown}
                 pauseRecording={pauseRecording}
                 resumeRecording={resumeRecording}
                 stopRecording={stopRecording}

@@ -6,12 +6,18 @@ export const PreviewStage = ({
     screenStream,
     isRecording,
     status,
+    countdown,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp
 }) => {
     return (
         <div className={`preview-wrapper ${isRecording ? 'is-recording' : ''}`}>
+            {countdown !== null && (
+                <div className="countdown-overlay">
+                    <div className="countdown-number">{countdown}</div>
+                </div>
+            )}
             <canvas
                 ref={canvasRef}
                 className="preview-canvas"
