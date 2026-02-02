@@ -6,7 +6,10 @@ const SaveRecordingModal = ({ blob, mimeType, onSave, onDiscard }) => {
 
     useEffect(() => {
         if (blob) {
-            const ext = mimeType.includes('mp4') ? '.mp4' : '.webm';
+            let ext = '.webm';
+            if (mimeType.includes('mp4')) ext = '.mp4';
+            else if (mimeType.includes('matroska') || mimeType.includes('mkv')) ext = '.mkv';
+
             setExtension(ext);
             setFileName(`recording-${new Date().toLocaleDateString().replace(/\//g, '-')}-${new Date().toLocaleTimeString().replace(/:/g, '-').split(' ')[0]}`);
         }

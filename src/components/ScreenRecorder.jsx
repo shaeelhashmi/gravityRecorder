@@ -5,6 +5,7 @@ import { useStreams } from '../hooks/useStreams';
 import { useFileSystem } from '../hooks/useFileSystem';
 import { useGoogleSync } from '../hooks/useGoogleSync';
 import { useRecording } from '../hooks/useRecording';
+import { EXPORT_FORMATS, getDefaultFormat } from '../constants/formats';
 
 // UI Components
 import { ControlBar } from './Controls/ControlBar';
@@ -42,6 +43,7 @@ const ScreenRecorder = () => {
     const [toast, setToast] = useState(null);
     const [highlightedFile, setHighlightedFile] = useState(null);
     const [pendingRecording, setPendingRecording] = useState(null);
+    const [recordingFormat, setRecordingFormat] = useState(getDefaultFormat());
 
     const showToast = useCallback((title, message, type = 'info') => {
         setToast({ title, message, type });
@@ -73,6 +75,7 @@ const ScreenRecorder = () => {
         screenStream, audioStream, cameraStream,
         activeBg, canvasRef,
         bitrate: QUALITY_PRESETS[recordingQuality].bitrate,
+        mimeType: EXPORT_FORMATS.find(f => f.id === recordingFormat)?.mimeType,
         onComplete: (blob, mimeType) => setPendingRecording({ blob, mimeType })
     });
 
@@ -360,6 +363,8 @@ const ScreenRecorder = () => {
                 recordingQuality={recordingQuality}
                 setRecordingQuality={setRecordingQuality}
                 qualityPresets={QUALITY_PRESETS}
+                recordingFormat={recordingFormat}
+                setRecordingFormat={setRecordingFormat}
                 startRecording={startRecording}
                 pauseRecording={pauseRecording}
                 resumeRecording={resumeRecording}

@@ -8,19 +8,31 @@ export const useRecording = ({
     activeBg,
     canvasRef,
     bitrate = 8000000,
+    mimeType: preferredMimeType,
     onComplete
 }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [status, setStatus] = useState('idle');
     const mediaRecorderRef = useRef(null);
+    const isStartingRef = useRef(false);
 
     const startRecording = useCallback(async () => {
+        if (isStartingRef.current) return;
+        isStartingRef.current = true;
+
         try {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                console.warn('Recording already in progress');
+                return;
+            }
+
             if (!screenStream && !cameraStream) {
                 alert('Enable Screen or Camera first');
                 return;
             }
+
+            setStatus('initializing');
 
             console.log('Finalizing stream for MediaRecorder...');
             const tracks = [];
@@ -42,11 +54,17 @@ export const useRecording = ({
 
             const recordingStream = new MediaStream(tracks);
 
-            const types = ['video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm', 'video/mp4'];
-            const mimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+            // Select MIME type: preference first, then fallback to WebM
+            let finalMimeType = '';
+            if (preferredMimeType && MediaRecorder.isTypeSupported(preferredMimeType)) {
+                finalMimeType = preferredMimeType;
+            } else {
+                const fallbacks = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+                finalMimeType = fallbacks.find(t => MediaRecorder.isTypeSupported(t)) || '';
+            }
 
             const mediaRecorder = new MediaRecorder(recordingStream, {
-                mimeType,
+                mimeType: finalMimeType,
                 videoBitsPerSecond: bitrate,
                 audioBitsPerSecond: 128000
             });
@@ -60,9 +78,9 @@ export const useRecording = ({
                 setStatus('processing');
                 const chunks = await storageManager.getAllChunks();
                 if (chunks.length > 0) {
-                    const blob = new Blob(chunks, { type: mimeType });
+                    const blob = new Blob(chunks, { type: finalMimeType });
                     if (onComplete) {
-                        onComplete(blob, mimeType);
+                        onComplete(blob, finalMimeType);
                     }
                 }
                 await storageManager.clearStorage();
@@ -75,8 +93,10 @@ export const useRecording = ({
         } catch (err) {
             console.error('Recording start failed:', err);
             setStatus('error');
+        } finally {
+            isStartingRef.current = false;
         }
-    }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, bitrate, onComplete]);
+    }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, bitrate, preferredMimeType, onComplete]);
 
     const pauseRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { BACKGROUND_PRESETS } from '../../constants/backgrounds';
+import { getSupportedFormats, EXPORT_FORMATS } from '../../constants/formats';
 
 export const ControlBar = ({
     screenStream,
@@ -27,9 +28,13 @@ export const ControlBar = ({
     resumeRecording,
     stopRecording,
     isPaused,
-    handleStopAll
+    handleStopAll,
+    recordingFormat,
+    setRecordingFormat
 }) => {
     const [isQualityOpen, setIsQualityOpen] = React.useState(false);
+    const [isFormatOpen, setIsFormatOpen] = React.useState(false);
+    const supportedFormats = React.useMemo(() => getSupportedFormats(), []);
 
     return (
         <div className="control-bar-container">
@@ -134,6 +139,24 @@ export const ControlBar = ({
                 </div>
             )}
 
+            {isFormatOpen && !isRecording && (
+                <div className="camera-dropdown glass-card">
+                    <div className="setting-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <span className="setting-label">Export Format</span>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                {supportedFormats.map(f => (
+                                    <button key={f.id} onClick={() => setRecordingFormat(f.id)}
+                                        className={`btn-small ${recordingFormat === f.id ? 'active' : ''}`}>
+                                        {f.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="control-bar">
                 <div className="source-toggles">
                     <button className={`btn-pill ${screenStream ? 'active' : ''}`}
@@ -158,6 +181,15 @@ export const ControlBar = ({
                             setIsQualityOpen(false);
                         }} disabled={isRecording}>
                         {activeBg !== 'none' || screenScale !== 1.0 ? '🎨 Styled' : '🎨 BG'}
+                    </button>
+                    <div className="vertical-divider" style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
+                    <button className={`btn-pill ${isFormatOpen ? 'active' : ''}`}
+                        onClick={() => {
+                            setIsFormatOpen(!isFormatOpen);
+                            setIsQualityOpen(false);
+                            setIsBgPanelOpen(false);
+                        }} disabled={isRecording}>
+                        🎬 {EXPORT_FORMATS.find(f => f.id === recordingFormat)?.label.split(' ')[0] || 'Format'}
                     </button>
                     <div className="vertical-divider" style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
                     <button className={`btn-pill ${isQualityOpen ? 'active' : ''}`}
