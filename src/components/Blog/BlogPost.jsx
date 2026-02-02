@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { getPostBySlug } from '../../services/BlogService';
+import SEO from '../SEO/SEO';
 import './Blog.css';
 
 const BlogPost = () => {
@@ -9,29 +10,18 @@ const BlogPost = () => {
     const navigate = useNavigate();
     const post = getPostBySlug(slug);
 
-    useEffect(() => {
-        if (post) {
-            document.title = `${post.title} | Gravity Recorder`;
-
-            // Dynamic SEO Meta Tags
-            let metaDescription = document.querySelector('meta[name="description"]');
-            if (metaDescription) {
-                metaDescription.setAttribute('content', post.excerpt || post.title);
-            } else {
-                const meta = document.createElement('meta');
-                meta.name = 'description';
-                meta.content = post.excerpt || post.title;
-                document.head.appendChild(meta);
-            }
-        }
-    }, [post]);
-
     if (!post) {
-        return <div className="blog-list-container">Post Not Found</div>;
+        return (
+            <div className="blog-list-container">
+                <SEO title="Post Not Found | Gravity Recorder" description="The requested blog post was not found." />
+                Post Not Found
+            </div>
+        );
     }
 
     return (
         <article className="blog-post">
+            <SEO title={`${post.title} | Gravity Recorder`} description={post.excerpt} />
             <Link to="/blog" className="back-link">
                 ← Back to Insights
             </Link>

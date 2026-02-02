@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCompetitorData } from '../../services/ComparisonService';
+import SEO from '../SEO/SEO';
 import './ComparisonPage.css';
 
 const ComparisonPage = () => {
@@ -14,18 +15,21 @@ const ComparisonPage = () => {
 
     const data = getCompetitorData(competitorName);
 
-    useEffect(() => {
-        if (data) {
-            document.title = `${data.name} Alternative | Gravity Recorder`;
-        }
-    }, [data]);
-
     if (!data) {
-        return <div className="comparison-container"><h1>Competitor Not Found</h1></div>;
+        return (
+            <div className="comparison-container">
+                <SEO title="Competitor Not Found | Gravity Recorder" description="Oops, we couldn't find the competitor you are looking for." />
+                <h1>Competitor Not Found</h1>
+            </div>
+        );
     }
 
     return (
         <div className="comparison-container">
+            <SEO
+                title={`Better than ${data.name}? The Best ${data.name} Alternative in 2026`}
+                description={`Stop paying for ${data.name}. Gravity Recorder is a free, local-first alternative with studio-grade effects and 100% privacy.`}
+            />
             <header className="comparison-header">
                 <h1>{data.tagline}</h1>
                 <p>{data.description}</p>

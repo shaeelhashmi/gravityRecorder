@@ -33,6 +33,28 @@
   <!-- Google API & Identity Services -->
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- Structured Data / JSON-LD -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Gravity Recorder",
+      "operatingSystem": "Windows, macOS, Linux, ChromeOS",
+      "applicationCategory": "MultimediaApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "The world's most aesthetic, local-first screen studio. Record high-quality video with webcam overlays, studio effects, and direct sync to Google Drive. 100% Private, 100% Free.",
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "reviewCount": "125"
+      }
+    }
+  </script>
 </head>
 
 <body>

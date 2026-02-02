@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../ThemeToggle/ThemeToggle';
+import SEO from '../SEO/SEO';
 import './LandingPage.css';
 
 const LandingPage = () => {
     const navigate = useNavigate();
+    // ... cache logic ...
     const [stars, setStars] = useState(() => {
         const cached = localStorage.getItem('gh_stars');
         return cached ? parseInt(cached) : null;
     });
 
     useEffect(() => {
+        // ... star fetch ...
         const fetchStars = async () => {
             try {
                 const response = await fetch('https://api.github.com/repos/uzairkath/gravityRecorder');
@@ -35,6 +38,10 @@ const LandingPage = () => {
 
     return (
         <div className="landing-container">
+            <SEO
+                title="Gravity Recorder | The #1 Free Loom Alternative for 2026"
+                description="Professional, local-first screen studio for creators. Record high-quality videos with webcam overlays and studio effects. 100% Private, 100% Free."
+            />
             {/* Mesh Gradient Background */}
             <div className="mesh-gradient"></div>
 
@@ -61,8 +68,8 @@ const LandingPage = () => {
                         Version 1.2 Now Open Source
                     </div>
                     <h1 className="hero-title">
-                        The World's Most <br />
-                        <span className="text-gradient">Aesthetic</span> Recorder.
+                        The Best <span className="text-gradient">Free Loom Alternative</span> <br />
+                        for Professional Creators.
                     </h1>
                     <p className="hero-subtitle">
                         A premium, local-first screen studio designed for creators who value privacy and high-end design. 100% Free. 100% Open Source.
