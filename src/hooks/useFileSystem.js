@@ -87,7 +87,7 @@ export const useFileSystem = (showToast, setHighlightedFile) => {
         const files = [];
         try {
             for await (const entry of handle.values()) {
-                if (entry.kind === 'file' && (entry.name.endsWith('.webm') || entry.name.endsWith('.mp4'))) {
+                if (entry.kind === 'file' && (entry.name.endsWith('.webm') || entry.name.endsWith('.mp4') || entry.name.endsWith('.mkv'))) {
                     const file = await entry.getFile();
                     files.push({
                         name: entry.name,
