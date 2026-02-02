@@ -6,14 +6,12 @@ import './LandingPage.css';
 
 const LandingPage = () => {
     const navigate = useNavigate();
-    // ... cache logic ...
     const [stars, setStars] = useState(() => {
         const cached = localStorage.getItem('gh_stars');
         return cached ? parseInt(cached) : null;
     });
 
     useEffect(() => {
-        // ... star fetch ...
         const fetchStars = async () => {
             try {
                 const response = await fetch('https://api.github.com/repos/uzairkath/gravityRecorder');
