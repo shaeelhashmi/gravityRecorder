@@ -635,6 +635,8 @@
 .studio-footer {
     padding: 6rem 4rem;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
+    z-index: 10;
 }
 
 .footer-content {
@@ -659,6 +661,28 @@
 .studio-footer p {
     color: #64748b;
     font-size: 0.95rem;
+    margin: 0;
+}
+
+.footer-links {
+    display: flex;
+    gap: 2rem;
+    margin-left: auto;
+}
+
+.footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    z-index: 10;
+}
+
+.footer-links a:hover {
+    color: var(--primary);
 }
 
 /* Global Utilities */
