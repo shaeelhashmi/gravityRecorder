@@ -1,13 +1,20 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { storageManager } from '../utils/StorageManager';
 import { getFileSignature } from '../utils/FileUtils';
+import { supabase } from '../utils/SupabaseClient';
 
 export const useGoogleSync = (showToast, directoryHandle) => {
     const [googleToken, setGoogleToken] = useState(null);
     const [cloudUser, setCloudUser] = useState({ isLoggedIn: false, profile: null });
     const [cloudRegistry, setCloudRegistry] = useState({}); // signature -> { driveId, shareLink }
+    const cloudRegistryRef = useRef({});
     const [uploadProgress, setUploadProgress] = useState({}); // filename -> percentage
     const isAuditing = useRef(false);
+
+    // Keep ref in sync
+    useEffect(() => {
+        cloudRegistryRef.current = cloudRegistry;
+    }, [cloudRegistry]);
 
     const loadCloudMetadata = useCallback(async (dirHandle) => {
         try {
@@ -17,7 +24,10 @@ export const useGoogleSync = (showToast, directoryHandle) => {
             const text = await file.text();
             if (text) {
                 const data = JSON.parse(text);
-                setCloudRegistry(data);
+                // Only update state if data is actually different to avoid unnecessary re-renders
+                if (JSON.stringify(data) !== JSON.stringify(cloudRegistryRef.current)) {
+                    setCloudRegistry(data);
+                }
                 return data;
             }
         } catch (err) {
@@ -41,14 +51,15 @@ export const useGoogleSync = (showToast, directoryHandle) => {
     }, [directoryHandle]);
 
     const handleLogout = useCallback(async () => {
+        await supabase.auth.signOut();
         setGoogleToken(null);
         setCloudUser({ isLoggedIn: false, profile: null });
-        await storageManager.removeSetting('cloud_user_token');
-        await storageManager.removeSetting('cloud_user_profile');
+        // storageManager cleanups are now managed by Supabase state
         showToast('Cloud Disconnected', 'You have been signed out', 'info');
     }, [showToast]);
 
-    const auditCloudRegistry = useCallback(async (token = googleToken, registryToAudit = cloudRegistry) => {
+    const auditCloudRegistry = useCallback(async (token = googleToken) => {
+        const registryToAudit = cloudRegistryRef.current;
         if (!token || isAuditing.current) return;
         if (Object.keys(registryToAudit).length === 0) return;
 
@@ -63,7 +74,6 @@ export const useGoogleSync = (showToast, directoryHandle) => {
 
             if (resp.status === 401) {
                 isAuditing.current = false;
-                // Re-auth logic will be handled by the caller or a silent refresh if needed
                 return;
             }
 
@@ -93,59 +103,39 @@ export const useGoogleSync = (showToast, directoryHandle) => {
         } finally {
             isAuditing.current = false;
         }
-    }, [googleToken, cloudRegistry, saveCloudMetadata, showToast]);
+    }, [googleToken, saveCloudMetadata, showToast]);
 
-    const fetchUserProfile = useCallback(async (token) => {
-        try {
-            const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const profile = await resp.json();
-            const userData = { isLoggedIn: true, profile };
-            setCloudUser(userData);
 
-            await storageManager.setSetting('cloud_user_token', token);
-            await storageManager.setSetting('cloud_user_profile', profile);
-
-            auditCloudRegistry(token);
-        } catch (err) {
-            console.error('Profile fetch failed:', err);
-        }
-    }, [auditCloudRegistry]);
-
-    const handleGoogleAuth = useCallback((onSuccess, forcePrompt = true, onFailure = () => { }, bypassCache = false) => {
-        const clientID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-
-        if (!clientID || !apiKey) {
-            const missing = !clientID && !apiKey ? 'Client ID and API Key' : (!clientID ? 'Client ID' : 'API Key');
-            showToast(
-                'Cloud Sync Setup Required',
-                `Google ${missing} is missing. Please check your .env file and setup documentation.`,
-                'warning'
-            );
-            console.warn(`[Cloud Sync] Missing configuration: ${missing}`);
+    const handleGoogleAuth = useCallback(async (onSuccess, forcePrompt = true, onFailure = () => { }, bypassCache = false) => {
+        // 1. If we have a valid token in memory and aren't forcing a fresh login, use it!
+        if (!forcePrompt && googleToken && !bypassCache) {
+            if (onSuccess) return onSuccess(googleToken);
             return;
         }
 
-        if (!forcePrompt && googleToken && !bypassCache) return onSuccess(googleToken);
+        // 2. Otherwise, we must redirect to Supabase/Google
+        const redirectUrl = window.location.origin + '/recorder';
+        console.log('Initiating Auth with Redirect:', redirectUrl);
 
-        const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: clientID,
-            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-            callback: (response) => {
-                if (response.access_token) {
-                    setGoogleToken(response.access_token);
-                    fetchUserProfile(response.access_token);
-                    onSuccess(response.access_token);
-                } else if (response.error) {
-                    onFailure(response.error);
-                }
-            },
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: redirectUrl,
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: forcePrompt ? 'consent' : 'select_account' // 'none' often fails for sensitive scopes like drive.file
+                },
+                scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email'
+            }
         });
 
-        client.requestAccessToken({ prompt: forcePrompt ? 'select_account' : '' });
-    }, [googleToken, fetchUserProfile]);
+        if (error) {
+            console.error('Supabase Auth Error:', error);
+            onFailure(error);
+            showToast('Auth Failed', error.message, 'error');
+        }
+        // Redirect happens here
+    }, [googleToken, showToast]);
 
     const uploadToDrive = async (fileHandle) => {
         handleGoogleAuth(async (token) => {
@@ -221,18 +211,32 @@ export const useGoogleSync = (showToast, directoryHandle) => {
         }, false);
     };
 
-    // Initialize Cloud State
+    // Initialize Cloud State & Listen for session
     useEffect(() => {
-        const loadCloud = async () => {
-            const savedToken = await storageManager.getSetting('cloud_user_token');
-            const savedProfile = await storageManager.getSetting('cloud_user_profile');
-            if (savedToken && savedProfile) {
-                setGoogleToken(savedToken);
-                setCloudUser({ isLoggedIn: true, profile: savedProfile });
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session) {
+                // provider_token is available after sign in
+                if (session.provider_token) {
+                    setGoogleToken(session.provider_token);
+                }
+
+                setCloudUser({
+                    isLoggedIn: true,
+                    profile: session.user.user_metadata
+                });
+
+                // Load metadata & audit if token exists
+                if (session.provider_token) {
+                    auditCloudRegistry(session.provider_token);
+                }
+            } else {
+                setGoogleToken(null);
+                setCloudUser({ isLoggedIn: false, profile: null });
             }
-        };
-        loadCloud();
-    }, []);
+        });
+
+        return () => subscription.unsubscribe();
+    }, [auditCloudRegistry]);
 
     return {
         googleToken, cloudUser, cloudRegistry, uploadProgress,
