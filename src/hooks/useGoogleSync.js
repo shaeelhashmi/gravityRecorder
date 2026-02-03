@@ -114,10 +114,24 @@ export const useGoogleSync = (showToast, directoryHandle) => {
     }, [auditCloudRegistry]);
 
     const handleGoogleAuth = useCallback((onSuccess, forcePrompt = true, onFailure = () => { }, bypassCache = false) => {
+        const clientID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+
+        if (!clientID || !apiKey) {
+            const missing = !clientID && !apiKey ? 'Client ID and API Key' : (!clientID ? 'Client ID' : 'API Key');
+            showToast(
+                'Cloud Sync Setup Required',
+                `Google ${missing} is missing. Please check your .env file and setup documentation.`,
+                'warning'
+            );
+            console.warn(`[Cloud Sync] Missing configuration: ${missing}`);
+            return;
+        }
+
         if (!forcePrompt && googleToken && !bypassCache) return onSuccess(googleToken);
 
         const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+            client_id: clientID,
             scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
             callback: (response) => {
                 if (response.access_token) {
