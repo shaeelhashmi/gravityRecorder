@@ -193,6 +193,12 @@ const LandingPage = () => {
             <footer className="studio-footer">
                 <div className="footer-content">
                     <div className="footer-logo" style={{ color: 'var(--text-main)', background: 'var(--glass)' }}>G</div>
+                    <div className="footer-links" style={{ display: 'flex', gap: '1.5rem' }}>
+                        <a href="/privacy" onClick={(e) => { e.preventDefault(); navigate('/privacy'); }}>Privacy Policy</a>
+                        <a href="/terms" onClick={(e) => { e.preventDefault(); navigate('/terms'); }}>Terms of Service</a>
+                    </div>
+                </div>
+                <div className="footer-bottom">
                     <p>© 2026 Gravity Labs. Built with ❤️ for the community.</p>
                 </div>
             </footer>

@@ -5,6 +5,7 @@ import LandingPage from './components/LandingPage/LandingPage';
 import BlogList from './components/Blog/BlogList';
 import BlogPost from './components/Blog/BlogPost';
 import ComparisonPage from './components/Marketing/ComparisonPage';
+import { PrivacyPolicy, TermsOfService } from './components/Legal/LegalPages';
 import { Analytics } from '@vercel/analytics/react';
 import { ThemeProvider, useTheme } from './context/ThemeContext.jsx';
 import ThemeToggle from './components/ThemeToggle/ThemeToggle';
@@ -78,6 +79,18 @@ function App() {
               <>
                 <NavigationHeader />
                 <ComparisonPage />
+              </>
+            } />
+            <Route path="/privacy" element={
+              <>
+                <NavigationHeader />
+                <PrivacyPolicy />
+              </>
+            } />
+            <Route path="/terms" element={
+              <>
+                <NavigationHeader />
+                <TermsOfService />
               </>
             } />
           </Routes>
