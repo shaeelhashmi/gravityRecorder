@@ -685,6 +685,119 @@
     color: var(--primary);
 }
 
+/* Comparison Section Styling */
+.comparison-section {
+    padding: 10rem 4rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.comparison-table-wrapper {
+    padding: 2.5rem;
+    border-radius: 32px;
+    margin-top: 4rem;
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.comparison-table th,
+.comparison-table td {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.comparison-table th {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.comparison-table td {
+    font-size: 1.1rem;
+    color: var(--text-main);
+}
+
+.comparison-table td.highlight,
+.comparison-table th.highlight {
+    color: #818cf8;
+    background: rgba(129, 140, 248, 0.05);
+}
+
+.comparison-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* FAQ Section Styling */
+.faq-section {
+    padding: 10rem 4rem;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.faq-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 4rem;
+}
+
+.faq-item {
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.faq-item:hover {
+    border-color: rgba(129, 140, 248, 0.2);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.faq-item.active {
+    border-color: rgba(129, 140, 248, 0.4);
+    background: rgba(129, 140, 248, 0.03);
+}
+
+.faq-question {
+    padding: 2rem 2.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.faq-question h3 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-main);
+}
+
+.faq-icon {
+    font-size: 1.5rem;
+    color: #818cf8;
+    font-weight: 300;
+}
+
+.faq-answer {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 2.5rem;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.faq-item.active .faq-answer {
+    max-height: 400px;
+    padding-bottom: 2.5rem;
+    opacity: 1;
+}
+
 /* Global Utilities */
 .glass {
     background: rgba(255, 255, 255, 0.02);
@@ -735,7 +848,8 @@
     }
 
     .features-grid-section,
-    .showcase-section-premium,
+    .comparison-section,
+    .faq-section,
     .oss-manifesto,
     .studio-footer {
         padding: 5rem 2rem;
@@ -790,5 +904,11 @@
 
     .manifesto-card h2 {
         font-size: 2.2rem;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        padding: 1rem;
+        font-size: 0.95rem;
     }
 }
