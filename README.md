@@ -97,7 +97,7 @@ For those who want to test the latest experimental features or help us debug the
 
 2. **Configure Environment Variables**:
    - Copy the example environment file: `cp .env.example .env`
-   - Open `.env` and add your `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY`. (See "Google Cloud Setup" below).
+   - Open `.env` and add your Google and Supabase credentials. (See "Setup Guides" below).
 
 3. **Launch Development**:
    ```bash
@@ -150,7 +150,41 @@ Paste both values into your `.env` file:
 ```env
 VITE_GOOGLE_CLIENT_ID=your_id_here.apps.googleusercontent.com
 VITE_GOOGLE_API_KEY=your_key_here
+
+VITE_SUPABASE_URL=your_project_url_here
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
 ```
+
+---
+
+## 🔐 Supabase Backend Setup
+
+While Gravity is **local-first**, we integrated a lightweight Supabase backend to solve a critical UX hurdle: **Google OAuth Token Expiration.**
+
+### 1. Why do we need a backend?
+Google’s security policy limits "Client-side" (Implicit) Access Tokens to exactly **1 hour**. For a screen recorder, this is a dealbreaker—your upload could fail mid-way if your session expires. 
+
+By using Supabase as our Auth provider, we can securely exchange a one-time code for a **Refresh Token**. Supabase handles the silent background rotation of your Google tokens, ensuring you stay logged in and your big 4K uploads never get interrupted.
+
+### 2. Why Supabase?
+- **Privacy-First Auth**: It allows us to keep your data on Google Drive while managing only the "keys" securely.
+- **Real-time Metadata**: It’s the fastest way to sync your recording library across devices without us ever touching your actual video files.
+
+### 3. Step-by-Step Local Setup
+1. **Create a Project**: Head to the [Supabase Dashboard](https://app.supabase.com/) and create a new project called `Gravity Recorder`.
+2. **Enable Google Auth**:
+    - Go to **Authentication > Providers > Google**.
+    - Toggle **Enabled**.
+    - Paste your `Client ID` and `Client Secret` (from your Google Cloud Console).
+    - **Crucial**: Copy the **Redirect URI** provided by Supabase and add it to your [Google Cloud Console](https://console.cloud.google.com/apis/credentials) under "Authorized redirect URIs".
+3. **Get your Keys**:
+    - Go to **Project Settings > API**.
+    - Copy your **Project URL** and **anon (public) key**.
+4. **Update `.env`**:
+    ```env
+    VITE_SUPABASE_URL=https://your-project.supabase.co
+    VITE_SUPABASE_ANON_KEY=your-long-anon-key-here
+    ```
 
 ---
 
