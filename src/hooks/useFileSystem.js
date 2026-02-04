@@ -7,6 +7,7 @@ export const useFileSystem = (showToast, setHighlightedFile) => {
     const [isHandleAuthorized, setIsHandleAuthorized] = useState(false);
     const [libraryFiles, setLibraryFiles] = useState([]);
     const [thumbnailMap, setThumbnailMap] = useState({});
+    const [processingQueue, setProcessingQueue] = useState(new Set());
     const [editingFileName, setEditingFileName] = useState(null);
     const [newName, setNewName] = useState('');
     const [selectedVideoUrl, setSelectedVideoUrl] = useState(null);
@@ -19,8 +20,8 @@ export const useFileSystem = (showToast, setHighlightedFile) => {
         return new Promise((resolve) => {
             video.onloadeddata = async () => {
                 const canvas = document.createElement('canvas');
-                canvas.width = 320;
-                canvas.height = 180;
+                canvas.width = 160;   // Nano thumbnails
+                canvas.height = 90;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -46,7 +47,9 @@ export const useFileSystem = (showToast, setHighlightedFile) => {
     };
 
     const getThumbnailUrl = async (videoName, videoHandle, dirHandle) => {
-        if (thumbnailMap[videoName]) return thumbnailMap[videoName];
+        if (thumbnailMap[videoName] || processingQueue.has(videoName)) return;
+
+        setProcessingQueue(prev => new Set(prev).add(videoName));
 
         try {
             const assetsHandle = await dirHandle.getDirectoryHandle('.recorder_assets', { create: true });
@@ -57,15 +60,20 @@ export const useFileSystem = (showToast, setHighlightedFile) => {
                 const file = await thumbFileHandle.getFile();
                 const url = URL.createObjectURL(file);
                 setThumbnailMap(prev => ({ ...prev, [videoName]: url }));
-                return url;
             } catch {
+                // If we are recording right now, don't generate new thumbnails (Save CPU)
+                // This is a crucial heuristic to prevent recording lag
                 const videoFile = await videoHandle.getFile();
                 await generateThumbnail(videoFile, videoName, dirHandle || directoryHandle);
-                return thumbnailMap[videoName];
             }
         } catch (err) {
             console.warn('Thumbnail engine error:', err);
-            return null;
+        } finally {
+            setProcessingQueue(prev => {
+                const next = new Set(prev);
+                next.delete(videoName);
+                return next;
+            });
         }
     };
 

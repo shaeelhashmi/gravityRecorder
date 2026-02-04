@@ -6,7 +6,9 @@ export const useRecording = ({
     audioStream,
     cameraStream,
     activeBg,
+    screenScale,
     canvasRef,
+    recordingQuality = 'native',
     bitrate = 8000000,
     mimeType: preferredMimeType,
     onComplete
@@ -15,6 +17,7 @@ export const useRecording = ({
     const [isPaused, setIsPaused] = useState(false);
     const [status, setStatus] = useState('idle');
     const mediaRecorderRef = useRef(null);
+    const chunksRef = useRef([]);
     const isStartingRef = useRef(false);
 
     const startRecording = useCallback(async () => {
@@ -37,20 +40,27 @@ export const useRecording = ({
             console.log('Finalizing stream for MediaRecorder...');
             const tracks = [];
 
-            // Case A: Webcam is active OR Background is selected (requires canvas for bubble/frame)
-            if (cameraStream || activeBg !== 'none') {
+            // Case A: Webcam is active OR Background/Frame is active OR Non-Native Scaling (requires canvas)
+            const useCanvas = cameraStream || activeBg !== 'none' || (screenScale && screenScale < 1.0) || recordingQuality !== 'native';
+
+            if (useCanvas) {
+                if (!canvasRef.current) throw new Error('Canvas not found');
                 const canvasStream = canvasRef.current.captureStream(30);
                 tracks.push(...canvasStream.getVideoTracks());
+                console.log('Using Canvas Mode for recording');
             }
             // Case B: Screen only (Direct mode for better performance)
             else if (screenStream) {
                 tracks.push(...screenStream.getVideoTracks());
+                console.log('Using Direct Mode for recording');
             }
 
             // Add Audio track if available
             if (audioStream) {
                 tracks.push(...audioStream.getAudioTracks());
             }
+
+            if (tracks.length === 0) throw new Error('No tracks available for recording');
 
             const recordingStream = new MediaStream(tracks);
 
@@ -59,9 +69,17 @@ export const useRecording = ({
             if (preferredMimeType && MediaRecorder.isTypeSupported(preferredMimeType)) {
                 finalMimeType = preferredMimeType;
             } else {
-                const fallbacks = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+                const fallbacks = [
+                    'video/webm;codecs=vp8,opus',
+                    'video/webm;codecs=vp9,opus',
+                    'video/webm;codecs=h264,opus',
+                    'video/webm',
+                    'video/mp4'
+                ];
                 finalMimeType = fallbacks.find(t => MediaRecorder.isTypeSupported(t)) || '';
             }
+
+            console.log('Selected MIME Type:', finalMimeType);
 
             const mediaRecorder = new MediaRecorder(recordingStream, {
                 mimeType: finalMimeType,
@@ -70,24 +88,36 @@ export const useRecording = ({
             });
             mediaRecorderRef.current = mediaRecorder;
 
+            chunksRef.current = [];
+
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) storageManager.saveChunk(e.data);
+                if (e.data && e.data.size > 0) {
+                    chunksRef.current.push(e.data);
+                }
+            };
+
+            mediaRecorder.onerror = (e) => {
+                console.error('MediaRecorder Error:', e);
+                setStatus('error');
             };
 
             mediaRecorder.onstop = async () => {
                 setStatus('processing');
-                const chunks = await storageManager.getAllChunks();
+                const chunks = chunksRef.current;
+                console.log(`Recording stopped. Total chunks: ${chunks.length}`);
+
                 if (chunks.length > 0) {
                     const blob = new Blob(chunks, { type: finalMimeType });
                     if (onComplete) {
                         onComplete(blob, finalMimeType);
                     }
                 }
-                await storageManager.clearStorage();
+
+                chunksRef.current = [];
                 setStatus('ready');
             };
 
-            mediaRecorder.start(1000);
+            mediaRecorder.start(1000); // 1s slice is more standard/stable
             setIsRecording(true);
             setStatus('recording');
         } catch (err) {
@@ -96,7 +126,7 @@ export const useRecording = ({
         } finally {
             isStartingRef.current = false;
         }
-    }, [screenStream, cameraStream, audioStream, activeBg, canvasRef, bitrate, preferredMimeType, onComplete]);
+    }, [screenStream, cameraStream, audioStream, activeBg, screenScale, canvasRef, recordingQuality, bitrate, preferredMimeType, onComplete]);
 
     const pauseRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {

@@ -5,6 +5,8 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
     const [screenStream, setScreenStream] = useState(null);
     const [audioStream, setAudioStream] = useState(null);
     const [cameraStream, setCameraStream] = useState(null);
+    const [screenDimensions, setScreenDimensions] = useState({ width: 0, height: 0 });
+    const [cameraDimensions, setCameraDimensions] = useState({ width: 0, height: 0 });
 
     const stopAll = useCallback(() => {
         [screenStream, cameraStream, audioStream].forEach(s => {
@@ -13,29 +15,41 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         setScreenStream(null);
         setCameraStream(null);
         setAudioStream(null);
+        setScreenDimensions({ width: 0, height: 0 });
+        setCameraDimensions({ width: 0, height: 0 });
         if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
         if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
         setStatus('idle');
     }, [screenStream, cameraStream, audioStream, screenVideoRef, cameraVideoRef, setStatus]);
 
-    const toggleScreen = async (width, height) => {
+    const toggleScreen = async () => {
         if (screenStream) {
             screenStream.getTracks().forEach(track => track.stop());
             setScreenStream(null);
+            setScreenDimensions({ width: 0, height: 0 });
             if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
             return;
         }
 
         try {
-            const stream = await mediaManager.getScreenStream(width, height);
+            const stream = await mediaManager.getScreenStream();
+            const track = stream.getVideoTracks()[0];
+            const settings = track.getSettings();
+
+            setScreenDimensions({
+                width: settings.width || width || 1920,
+                height: settings.height || height || 1080
+            });
+
             setScreenStream(stream);
             if (screenVideoRef.current) screenVideoRef.current.srcObject = stream;
 
             // Explicitly play to ensure readyState progresses
             await screenVideoRef.current?.play().catch(e => console.warn('Screen video play delayed:', e));
 
-            stream.getVideoTracks()[0].onended = () => {
+            track.onended = () => {
                 setScreenStream(null);
+                setScreenDimensions({ width: 0, height: 0 });
                 if (screenVideoRef.current) screenVideoRef.current.srcObject = null;
             };
 
@@ -67,12 +81,21 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         if (cameraStream) {
             cameraStream.getTracks().forEach(track => track.stop());
             setCameraStream(null);
+            setCameraDimensions({ width: 0, height: 0 });
             if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
             return;
         }
 
         try {
             const stream = await mediaManager.getCameraStream(width, height);
+            const track = stream.getVideoTracks()[0];
+            const settings = track.getSettings();
+
+            setCameraDimensions({
+                width: settings.width || width || 1280,
+                height: settings.height || height || 720
+            });
+
             setCameraStream(stream);
             if (cameraVideoRef.current) cameraVideoRef.current.srcObject = stream;
 
@@ -90,6 +113,8 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         screenStream,
         audioStream,
         cameraStream,
+        screenDimensions,
+        cameraDimensions,
         toggleScreen,
         toggleMic,
         toggleCamera,
