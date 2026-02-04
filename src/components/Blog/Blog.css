@@ -220,6 +220,46 @@
     padding-left: 1.5rem;
 }
 
+/* Premium Table Styling */
+.post-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3rem 0;
+    font-size: 1rem;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.post-content th {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8b5cf6;
+    font-weight: 700;
+    text-align: left;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.post-content td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+}
+
+.post-content tr:last-child td {
+    border-bottom: none;
+}
+
+.post-content tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-main);
+}
+
+.post-content td strong {
+    color: #8b5cf6;
+}
+
 .post-cta {
     margin-top: auto;
     padding: 5rem 2rem;

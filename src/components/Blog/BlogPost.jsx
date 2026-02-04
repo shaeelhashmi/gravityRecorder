@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getPostBySlug } from '../../services/BlogService';
 import SEO from '../SEO/SEO';
 import './Blog.css';
@@ -49,7 +50,7 @@ const BlogPost = () => {
             )}
 
             <div className="post-content">
-                <ReactMarkdown>{post.body}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.body}</ReactMarkdown>
             </div>
 
             <div className="post-cta">
