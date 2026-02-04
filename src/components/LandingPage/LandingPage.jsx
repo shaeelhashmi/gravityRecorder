@@ -92,8 +92,7 @@ const LandingPage = () => {
                         Privacy-First Browser Studio
                     </div>
                     <h1 className="hero-title">
-                        The Best <span className="text-gradient">Free Screen Recorder</span> <br />
-                        with Camera Bubble & 2K Quality.
+                        The Best <span className="text-gradient">Free Screen Recorder</span> with Camera Bubble & 2K Quality.
                     </h1>
                     <p className="hero-subtitle">
                         A free and open source tool with premium features like gradient canvas backgrounds, camera bubble PIP, mic enablement, and pause/play control. Record in 720p, 1080p, or 2K quality with zero lag.
