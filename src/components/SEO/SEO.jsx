@@ -10,10 +10,10 @@ import { useLocation } from 'react-router-dom';
  */
 const SEO = ({ title, description, canonicalPath }) => {
     const location = useLocation();
-    const siteUrl = 'https://gravityrecorder.com';
+    const siteUrl = 'https://gravityrecorder.com'; // Enforce non-www for SEO consistency
     const currentPath = canonicalPath || location.pathname;
 
-    // Ensure no trailing slash in canonical URL
+    // Ensure no trailing slash and consistent domain prefix
     const cleanPath = currentPath === '/' ? '' : currentPath.replace(/\/$/, "");
     const canonicalUrl = `${siteUrl}${cleanPath}`;
 
