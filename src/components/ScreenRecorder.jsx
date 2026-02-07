@@ -16,10 +16,10 @@ import { VideoPlayerModal } from './Modals/VideoPlayerModal';
 import SaveRecordingModal from './Modals/SaveRecordingModal';
 
 const QUALITY_PRESETS = {
-    'native': { width: null, height: null, label: 'Native Source', bitrate: 6000000 },
-    '720p': { width: 1280, height: 720, label: '720p (HD)', bitrate: 1500000 },
-    '1080p': { width: 1920, height: 1080, label: '1080p (FHD)', bitrate: 2500000 },
-    '1440p': { width: 2560, height: 1440, label: '1440p (2K)', bitrate: 4500000 }
+    'native': { width: null, height: null, label: 'Native Source', bitrate: 15000000 },
+    '720p': { width: 1280, height: 720, label: '720p (HD)', bitrate: 6000000 },
+    '1080p': { width: 1920, height: 1080, label: '1080p (FHD)', bitrate: 12000000 },
+    '1440p': { width: 2560, height: 1440, label: '1440p (2K)', bitrate: 20000000 }
 };
 
 const ScreenRecorder = () => {
@@ -199,109 +199,98 @@ const ScreenRecorder = () => {
         }
     }, [screenStream, cameraStream, activeBg, screenScale, recordingQuality, screenDimensions, cameraDimensions]);
 
-    // 2. High-Performance Render Function (Runs every 33ms)
+    // 2. High-Performance Render Function
     const renderFrame = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d', { alpha: false });
 
-        const isCanvasNeeded = cameraStream || activeBg !== 'none' || screenScale < 1.0 || recordingQuality !== 'native';
+        const isCanvasNeeded = cameraStream || activeBg !== 'none' || screenScale < 1.0 || (recordingQuality && recordingQuality !== 'native');
         if (!isCanvasNeeded) return;
 
-        const draw = () => {
+        // Pre-calculate expensive layout values only when needed
+        const bubbleSize = canvas.height * webcamScale;
+        const { x, y } = webcamPos.current;
 
-            const bubbleSize = canvas.height * webcamScale;
+        // 1. Draw Background
+        const preset = BACKGROUND_PRESETS.find(p => p.id === activeBg);
+        if (preset && preset.colors) {
+            // Caching gradient would be better, but creating a simple linear one is relatively fast.
+            // For max performance, we create it once per frame.
+            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            preset.colors.forEach((c, i) => grad.addColorStop(i / (preset.colors.length - 1), c));
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
 
-            webcamPos.current.x = Math.max(0, Math.min(canvas.width - bubbleSize, webcamPos.current.x));
-            webcamPos.current.y = Math.max(0, Math.min(canvas.height - bubbleSize, webcamPos.current.y));
-            const { x, y } = webcamPos.current;
+        // 2. Draw Screen
+        if (screenStream && screenVideoRef.current.readyState >= 2) {
+            const videoData = screenVideoRef.current;
+            const vWidth = videoData.videoWidth;
+            const vHeight = videoData.videoHeight;
+            const vAspect = vWidth / vHeight;
+            const cAspect = canvas.width / canvas.height;
 
-            // 1. Draw Background (Acts as clearRect)
-            const preset = BACKGROUND_PRESETS.find(p => p.id === activeBg);
-            if (preset && preset.colors) {
-                const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-                preset.colors.forEach((c, i) => grad.addColorStop(i / (preset.colors.length - 1), c));
-                ctx.fillStyle = grad;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            let drawWidth, drawHeight;
+            if (vAspect > cAspect) {
+                drawWidth = canvas.width;
+                drawHeight = canvas.width / vAspect;
             } else {
-                ctx.fillStyle = '#1a1a1a';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                drawHeight = canvas.height;
+                drawWidth = canvas.height * vAspect;
             }
 
-            // 2. Draw Screen
-            if (screenStream && screenVideoRef.current.readyState >= 2) {
-                const videoData = screenVideoRef.current;
-                const vWidth = videoData.videoWidth;
-                const vHeight = videoData.videoHeight;
-                const vAspect = vWidth / vHeight;
-                const cAspect = canvas.width / canvas.height;
+            const sw = drawWidth * screenScale;
+            const sh = drawHeight * screenScale;
+            const sx = (canvas.width - sw) / 2;
+            const sy = (canvas.height - sh) / 2;
 
-                let drawWidth, drawHeight;
-                if (vAspect > cAspect) {
-                    drawWidth = canvas.width;
-                    drawHeight = canvas.width / vAspect;
-                } else {
-                    drawHeight = canvas.height;
-                    drawWidth = canvas.height * vAspect;
-                }
+            if (screenScale < 1.0) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(sx, sy, sw, sh, 16);
+                ctx.clip();
+                ctx.drawImage(videoData, sx, sy, sw, sh);
+                ctx.restore();
+            } else {
+                ctx.drawImage(videoData, sx, sy, sw, sh);
+            }
+        }
 
-                const sw = drawWidth * screenScale;
-                const sh = drawHeight * screenScale;
-                const sx = (canvas.width - sw) / 2;
-                const sy = (canvas.height - sh) / 2;
+        // 3. Draw Camera Bubble
+        if (cameraStream && cameraVideoRef.current.readyState >= 2) {
+            const webcamVideo = cameraVideoRef.current;
+            const vWidth = webcamVideo.videoWidth;
+            const vHeight = webcamVideo.videoHeight;
+            const vAspect = vWidth / vHeight;
 
-                if (screenScale < 1.0) {
-                    ctx.save();
-                    // Shadows and clipping are very expensive.
-                    // We only use basic clipping to keep the frame shape.
-                    ctx.beginPath();
-                    ctx.roundRect(sx, sy, sw, sh, 16);
-                    ctx.clip();
-                    ctx.drawImage(videoData, sx, sy, sw, sh);
-                    ctx.restore();
-                } else {
-                    ctx.drawImage(videoData, sx, sy, sw, sh);
-                }
+            let dw, dh, dx, dy;
+            if (vAspect > 1) {
+                dw = bubbleSize * vAspect; dh = bubbleSize;
+                dx = x - (dw - bubbleSize) / 2; dy = y;
+            } else {
+                dw = bubbleSize; dh = bubbleSize / vAspect;
+                dx = x; dy = y - (dh - bubbleSize) / 2;
             }
 
-            // 3. Draw Camera Bubble
-            if (cameraStream && cameraVideoRef.current.readyState >= 2) {
-                const webcamVideo = cameraVideoRef.current;
-                const bx = x;
-                const by = y;
-
-                const vWidth = webcamVideo.videoWidth;
-                const vHeight = webcamVideo.videoHeight;
-                const vAspect = vWidth / vHeight;
-
-                let dw, dh, dx, dy;
-                if (vAspect > 1) {
-                    dw = bubbleSize * vAspect; dh = bubbleSize;
-                    dx = bx - (dw - bubbleSize) / 2; dy = by;
+            if (webcamShape !== 'square') {
+                ctx.save();
+                ctx.beginPath();
+                if (webcamShape === 'circle') {
+                    ctx.arc(x + bubbleSize / 2, y + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
                 } else {
-                    dw = bubbleSize; dh = bubbleSize / vAspect;
-                    dx = bx; dy = by - (dh - bubbleSize) / 2;
+                    ctx.roundRect(x, y, bubbleSize, bubbleSize, 32);
                 }
-
-                // If specialized shape is requested, use clipping. Otherwise, faster raw draw.
-                if (webcamShape !== 'square') {
-                    ctx.save();
-                    ctx.beginPath();
-                    if (webcamShape === 'circle') {
-                        ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
-                    } else {
-                        ctx.roundRect(bx, by, bubbleSize, bubbleSize, 32);
-                    }
-                    ctx.clip();
-                    ctx.drawImage(webcamVideo, dx, dy, dw, dh);
-                    ctx.restore();
-                } else {
-                    ctx.drawImage(webcamVideo, dx, dy, dw, dh);
-                }
+                ctx.clip();
+                ctx.drawImage(webcamVideo, dx, dy, dw, dh);
+                ctx.restore();
+            } else {
+                ctx.drawImage(webcamVideo, dx, dy, dw, dh);
             }
-        };
-
-        draw();
+        }
     }, [cameraStream, screenStream, activeBg, webcamScale, screenScale, webcamShape, cameraVideoRef, recordingQuality]);
 
     const launchLoop = useCallback(() => {
@@ -313,7 +302,6 @@ const ScreenRecorder = () => {
         }
 
         if (isCanvasNeeded) {
-            // Create the Background Heartbeat Worker
             workerRef.current = new Worker(new URL('../workers/heartbeat.worker.js', import.meta.url), { type: 'module' });
 
             workerRef.current.onmessage = (e) => {
@@ -322,6 +310,7 @@ const ScreenRecorder = () => {
                 }
             };
 
+            workerRef.current.postMessage({ action: 'setFps', fps: 30 });
             workerRef.current.postMessage({ action: 'start' });
             console.log('Background Heartbeat: Online');
         }

@@ -9,10 +9,10 @@ export const EXPORT_FORMATS = [
         ext: '.mp4'
     },
     {
-        id: 'webm-vp8',
-        label: 'WebM (VP8) - Performance',
-        mimeType: 'video/webm;codecs=vp8,opus',
-        ext: '.webm'
+        id: 'mp4-generic',
+        label: 'MP4 (Standard)',
+        mimeType: 'video/mp4',
+        ext: '.mp4'
     },
     {
         id: 'webm-vp9',
@@ -21,22 +21,16 @@ export const EXPORT_FORMATS = [
         ext: '.webm'
     },
     {
+        id: 'webm-vp8',
+        label: 'WebM (VP8) - Performance',
+        mimeType: 'video/webm;codecs=vp8,opus',
+        ext: '.webm'
+    },
+    {
         id: 'mkv-vp9',
         label: 'MKV (VP9)',
         mimeType: 'video/x-matroska;codecs=vp9,opus',
         ext: '.mkv'
-    },
-    {
-        id: 'mkv-generic',
-        label: 'MKV (Standard)',
-        mimeType: 'video/x-matroska',
-        ext: '.mkv'
-    },
-    {
-        id: 'mp4-generic',
-        label: 'MP4 (Standard)',
-        mimeType: 'video/mp4',
-        ext: '.mp4'
     }
 ];
 
