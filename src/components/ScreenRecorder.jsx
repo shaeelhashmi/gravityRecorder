@@ -78,7 +78,7 @@ const ScreenRecorder = () => {
     }, []);
 
     const {
-        isRecording, isPaused, startRecording, pauseRecording, resumeRecording, stopRecording, resetRecording
+        isRecording, isPaused, startRecording: startMediaRecording, pauseRecording, resumeRecording, stopRecording, resetRecording
     } = useRecording({
         screenStream, audioStream, cameraStream,
         activeBg, screenScale, canvasRef,
@@ -131,6 +131,7 @@ const ScreenRecorder = () => {
     const isDragging = useRef(false);
     const dragOffset = useRef({ x: 0, y: 0 });
     const drawTimerRef = useRef(null);
+    const countdownTimerRef = useRef(null);
 
     // Initialize hidden video elements
     useEffect(() => {
@@ -149,6 +150,8 @@ const ScreenRecorder = () => {
 
     const handleStopAll = () => {
         if (drawTimerRef.current) clearTimeout(drawTimerRef.current);
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        setCountdown(null);
         resetRecording();
         stopStreams();
         setActiveBg('none');
@@ -380,6 +383,25 @@ const ScreenRecorder = () => {
             syncLibrary(directoryHandle, { googleToken, auditCloudRegistry, loadCloudMetadata });
         }
     }, [isHistoryOpen, directoryHandle, googleToken, auditCloudRegistry, loadCloudMetadata, syncLibrary]);
+
+    const startRecording = useCallback(() => {
+        if (isRecording || countdown !== null) return;
+
+        setCountdown(3);
+        countdownTimerRef.current = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    if (countdownTimerRef.current) {
+                        clearInterval(countdownTimerRef.current);
+                        countdownTimerRef.current = null;
+                    }
+                    startMediaRecording();
+                    return null;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    }, [isRecording, countdown, startMediaRecording]);
 
     return (
         <div className="recorder-container">
