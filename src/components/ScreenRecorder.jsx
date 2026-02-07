@@ -41,7 +41,6 @@ const ScreenRecorder = () => {
     const [activeBg, setActiveBg] = useState('none');
     const [screenScale, setScreenScale] = useState(1.0);
     const [recordingQuality, setRecordingQuality] = useState('1080p');
-    const [isBgPanelOpen, setIsBgPanelOpen] = useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [toast, setToast] = useState(null);
     const [highlightedFile, setHighlightedFile] = useState(null);
@@ -156,7 +155,6 @@ const ScreenRecorder = () => {
         stopStreams();
         setActiveBg('none');
         setScreenScale(1.0);
-        setIsBgPanelOpen(false);
     };
 
     const [currentDimensions, setCurrentDimensions] = useState({ width: 0, height: 0 });
@@ -441,8 +439,6 @@ const ScreenRecorder = () => {
                 activeBg={activeBg}
                 setActiveBg={setActiveBg}
                 isRecording={isRecording}
-                isBgPanelOpen={isBgPanelOpen}
-                setIsBgPanelOpen={setIsBgPanelOpen}
                 webcamShape={webcamShape}
                 setWebcamShape={setWebcamShape}
                 webcamScale={webcamScale}
