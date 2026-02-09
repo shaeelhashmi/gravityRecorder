@@ -34,10 +34,12 @@ export const ControlBar = ({
     const [activePanel, setActivePanel] = React.useState(null); // 'camera', 'bg', 'quality', 'format'
     const supportedFormats = React.useMemo(() => getSupportedFormats(), []);
     const [showMicOptions, setShowMicOptions] = React.useState(false);
-    const [micType, setMicType] = React.useState('system'); // 'system' or 'mic'
+    const [micType, setMicType] = React.useState('');
     const [showCameraOptions, setShowCameraOptions] = React.useState(false);
-    const [cameraOption, setCameraOption] = React.useState('webcam'); // 'webcam' or 'virtual'
+    const [cameraOption, setCameraOption] = React.useState(''); 
+    const [cameras, setCameras] = React.useState([]);
     const [microphones, setMicrophones] = React.useState([]);
+
 
     const togglePanel = (panel) => {
         setActivePanel(activePanel === panel ? null : panel);
@@ -177,9 +179,20 @@ export const ControlBar = ({
                     </button>
                     <div className="grid">
                     <button className={`btn-pill ${cameraStream ? 'active' : ''}`}
-                        onClick={() => {
+                        onClick={async() => {
                             if (!cameraStream) {
-                                toggleCamera();
+                                await toggleCamera();
+                                const devices = await navigator.mediaDevices.enumerateDevices();
+                                const cameras = devices.filter(d => d.kind === 'videoinput');
+                                setCameras(cameras);
+                                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                                const activeTrack = stream.getVideoTracks()[0];
+                                const settings = activeTrack.getSettings();
+
+                                // `deviceId` of the camera actually in use
+                                const defaultCameraId = settings.deviceId;
+
+                                setCameraOption(defaultCameraId);
                                 setActivePanel('camera'); // Auto-open settings when turning on
                             } else {
                                 // If already on, treat as a toggle for the panel
@@ -201,13 +214,12 @@ export const ControlBar = ({
                         showCameraOptions && (
                             <div style={{ position:'absolute',top:'4rem',background:'#1f2537',borderRadius:'10px',padding:'0.8rem',zIndex:20,width:'150px',left:'6rem'}}>
                                 <div  >
-                                    {['webcam', 'virtual'].map(type => (
+                                    {cameras.map(type => (
                                         <>
-
-                                            <button key={type} onClick={() => setCameraOption(type)}
-                                                className={`btn-small  ${cameraOption === type ? 'active' : ''}`}
+                                            <button key={type.deviceId} onClick={() => setCameraOption(type.deviceId)}
+                                                className={`btn-small  ${cameraOption === type.deviceId ? 'active' : ''}`}
                                                 style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
-                                                {type === 'webcam' ? 'Webcam' : 'Virtual Camera'}
+                                                {type.label}
                                             </button>
                                         </>
                                     ))}
@@ -223,12 +235,17 @@ export const ControlBar = ({
                     await toggleMic()
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                    
                     setMicrophones(audioInputs);
-                    console.log('Available microphones after toggle:', audioInputs);
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     const track = stream.getAudioTracks()[0];
-                    console.log("Currently active deviceId:", track.getSettings().deviceId);
-                    setMicType(audioInputs.find(d => d.deviceId === track.getSettings().deviceId) || 'system');
+                    console.log("MicType printed:", micType);
+                    if(micType === ''){
+                    setMicType(audioInputs.find(d => d.deviceId === track.
+                    getSettings().deviceId).deviceId || 'system');   
+                    console.log("MicType set to:", micType);
+                    console.log("Audio Inputs:", audioInputs);
+                    }
                     }
                     catch(err){
                         console.error('Error toggling mic:', err);
@@ -247,8 +264,8 @@ export const ControlBar = ({
                                 <div  >
                                     {microphones.map(type => (
                                         <>
-                                            <button key={type.deviceId} onClick={() => setMicType(type)}
-                                                className={`btn-small  ${micType === type ? 'active' : ''}`}
+                                            <button key={type.deviceId} onClick={() => setMicType(type.deviceId)}
+                                                className={`btn-small  ${micType === type.deviceId ? 'active' : ''}`}
                                                 style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
                                                 {type.label}
                                             </button>   
