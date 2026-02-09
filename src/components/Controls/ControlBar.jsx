@@ -1,7 +1,8 @@
-import React from 'react';
+import React,{useEffect} from 'react';
 import { BACKGROUND_PRESETS } from '../../constants/backgrounds';
 import { getSupportedFormats, EXPORT_FORMATS } from '../../constants/formats';
-
+import ChevronDown from './SVG/ChevronDown';
+import './Controls.css';
 export const ControlBar = ({
     screenStream,
     cameraStream,
@@ -32,6 +33,11 @@ export const ControlBar = ({
 }) => {
     const [activePanel, setActivePanel] = React.useState(null); // 'camera', 'bg', 'quality', 'format'
     const supportedFormats = React.useMemo(() => getSupportedFormats(), []);
+    const [showMicOptions, setShowMicOptions] = React.useState(false);
+    const [micType, setMicType] = React.useState('system'); // 'system' or 'mic'
+    const [showCameraOptions, setShowCameraOptions] = React.useState(false);
+    const [cameraOption, setCameraOption] = React.useState('webcam'); // 'webcam' or 'virtual'
+    const [microphones, setMicrophones] = React.useState([]);
 
     const togglePanel = (panel) => {
         setActivePanel(activePanel === panel ? null : panel);
@@ -169,6 +175,7 @@ export const ControlBar = ({
                         onClick={toggleScreen} disabled={isRecording}>
                         {screenStream ? '● Screen' : 'Screen'}
                     </button>
+                    <div className="grid">
                     <button className={`btn-pill ${cameraStream ? 'active' : ''}`}
                         onClick={() => {
                             if (!cameraStream) {
@@ -185,10 +192,74 @@ export const ControlBar = ({
                         }} disabled={isRecording}>
                         {cameraStream ? '● Camera' : 'Camera'}
                     </button>
+                         <button className="dropDownBtn" onClick={()=>{
+                        setShowCameraOptions(!showCameraOptions)
+                    }}>
+                            <ChevronDown/>
+                    </button>
+                    {
+                        showCameraOptions && (
+                            <div style={{ position:'absolute',top:'4rem',background:'#1f2537',borderRadius:'10px',padding:'0.8rem',zIndex:20,width:'150px',left:'6rem'}}>
+                                <div  >
+                                    {['webcam', 'virtual'].map(type => (
+                                        <>
+
+                                            <button key={type} onClick={() => setCameraOption(type)}
+                                                className={`btn-small  ${cameraOption === type ? 'active' : ''}`}
+                                                style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
+                                                {type === 'webcam' ? 'Webcam' : 'Virtual Camera'}
+                                            </button>
+                                        </>
+                                    ))}
+                                </div>
+                            </div>
+                        )
+                    }
+                    </div>
+                     <div className='grid'>
                     <button className={`btn-pill ${audioStream ? 'active' : ''}`}
-                        onClick={toggleMic} disabled={isRecording}>
+                    onClick={async ()=>{
+                    try{
+                    await toggleMic()
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                    setMicrophones(audioInputs);
+                    console.log('Available microphones after toggle:', audioInputs);
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const track = stream.getAudioTracks()[0];
+                    console.log("Currently active deviceId:", track.getSettings().deviceId);
+                    setMicType(audioInputs.find(d => d.deviceId === track.getSettings().deviceId) || 'system');
+                    }
+                    catch(err){
+                        console.error('Error toggling mic:', err);
+                    }
+                    }} disabled={isRecording} >
                         {audioStream ? '● Mic' : 'Mic'}
                     </button>
+                    <button className="dropDownBtn" onClick={()=>{
+                        setShowMicOptions(!showMicOptions)
+                    }}>
+                            <ChevronDown/>
+                    </button>
+                      {
+                        showMicOptions && (
+                            <div style={{ position:'absolute',top:'4rem',background:'#1f2537',borderRadius:'10px',padding:'0.8rem',zIndex:20,width:'150px'}}>
+                                <div  >
+                                    {microphones.map(type => (
+                                        <>
+                                            <button key={type.deviceId} onClick={() => setMicType(type)}
+                                                className={`btn-small  ${micType === type ? 'active' : ''}`}
+                                                style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
+                                                {type.label}
+                                            </button>   
+                        
+                                        </>
+                                    ))}
+                                </div>
+                            </div>
+                        )
+                    }
+                    </div>
                     <div className="vertical-divider" style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.2rem' }}></div>
                     <button className={`btn-pill ${activeBg !== 'none' || screenScale !== 1.0 || activePanel === 'bg' ? 'active' : ''}`}
                         onClick={() => togglePanel('bg')} disabled={isRecording}>
