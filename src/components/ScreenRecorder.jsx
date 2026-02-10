@@ -77,7 +77,7 @@ const ScreenRecorder = () => {
     }, []);
 
     const {
-        isRecording, isPaused, startRecording: startMediaRecording, pauseRecording, resumeRecording, stopRecording, resetRecording
+        isRecording, isPaused, startRecording: startMediaRecording, pauseRecording, resumeRecording, stopRecording, resetRecording,micID, setMicID
     } = useRecording({
         screenStream, audioStream, cameraStream,
         activeBg, screenScale, canvasRef,
@@ -448,6 +448,8 @@ const ScreenRecorder = () => {
                 stopRecording={stopRecording}
                 isPaused={isPaused}
                 handleStopAll={handleStopAll}
+                micID={micID}
+                 setMicID={setMicID}
             />
 
             <div className="mode-info">

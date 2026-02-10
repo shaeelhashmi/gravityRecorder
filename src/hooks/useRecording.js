@@ -16,11 +16,13 @@ export const useRecording = ({
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [status, setStatus] = useState('idle');
+    const [micID, setMicID] = useState('');
     const mediaRecorderRef = useRef(null);
     const chunksRef = useRef([]);
     const isStartingRef = useRef(false);
 
     const startRecording = useCallback(async () => {
+        console.log('Attempting to start recording...');
         if (isStartingRef.current) return;
         isStartingRef.current = true;
 
@@ -56,7 +58,26 @@ export const useRecording = ({
             }
 
             // Add Audio track if available
-            if (audioStream) {
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const mics = devices.filter(d => d.kind === 'audioinput');
+
+  // 2. For each mic, get a MediaStreamTrack
+  const tracks2 = await Promise.all(
+    mics.map(async (mic) => {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: mic.deviceId } }
+      });
+      // Return the first track from this mic
+      return stream.getAudioTracks()[0];
+    })
+     );
+        const currStream = tracks2.find(t => t.getSettings().deviceId === micID);
+        console.log(micID)
+            if (currStream) {
+                tracks.push(currStream);
+            }
+            else if(audioStream){
                 tracks.push(...audioStream.getAudioTracks());
             }
 
@@ -172,6 +193,8 @@ export const useRecording = ({
         resumeRecording,
         stopRecording,
         resetRecording,
-        mediaRecorderRef
+        mediaRecorderRef,
+        micID,
+        setMicID
     };
 };

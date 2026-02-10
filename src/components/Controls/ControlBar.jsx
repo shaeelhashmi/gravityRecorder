@@ -1,4 +1,4 @@
-import React,{useEffect} from 'react';
+import React from 'react';
 import { BACKGROUND_PRESETS } from '../../constants/backgrounds';
 import { getSupportedFormats, EXPORT_FORMATS } from '../../constants/formats';
 import ChevronDown from './SVG/ChevronDown';
@@ -29,12 +29,13 @@ export const ControlBar = ({
     isPaused,
     handleStopAll,
     recordingFormat,
-    setRecordingFormat
+    setRecordingFormat,
+        micID,
+        setMicID
 }) => {
     const [activePanel, setActivePanel] = React.useState(null); // 'camera', 'bg', 'quality', 'format'
     const supportedFormats = React.useMemo(() => getSupportedFormats(), []);
     const [showMicOptions, setShowMicOptions] = React.useState(false);
-    const [micType, setMicType] = React.useState('');
     const [showCameraOptions, setShowCameraOptions] = React.useState(false);
     const [cameraOption, setCameraOption] = React.useState(''); 
     const [cameras, setCameras] = React.useState([]);
@@ -207,7 +208,8 @@ export const ControlBar = ({
                     </button>
                          <button className="dropDownBtn" onClick={()=>{
                         setShowCameraOptions(!showCameraOptions)
-                    }}>
+                    }}
+                    disabled={isRecording}>
                             <ChevronDown/>
                     </button>
                     {
@@ -237,14 +239,12 @@ export const ControlBar = ({
                     const audioInputs = devices.filter(device => device.kind === 'audioinput');
                     
                     setMicrophones(audioInputs);
+
+                    if(micID === ''){ 
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     const track = stream.getAudioTracks()[0];
-                    console.log("MicType printed:", micType);
-                    if(micType === ''){
-                    setMicType(audioInputs.find(d => d.deviceId === track.
-                    getSettings().deviceId).deviceId || 'system');   
-                    console.log("MicType set to:", micType);
-                    console.log("Audio Inputs:", audioInputs);
+                    setMicID(audioInputs.find(d => d.deviceId === track.
+                    getSettings().deviceId).deviceId || 'system');            
                     }
                     }
                     catch(err){
@@ -255,7 +255,7 @@ export const ControlBar = ({
                     </button>
                     <button className="dropDownBtn" onClick={()=>{
                         setShowMicOptions(!showMicOptions)
-                    }}>
+                    }} disabled={isRecording}>
                             <ChevronDown/>
                     </button>
                       {
@@ -263,14 +263,16 @@ export const ControlBar = ({
                             <div style={{ position:'absolute',top:'4rem',background:'#1f2537',borderRadius:'10px',padding:'0.8rem',zIndex:20,width:'150px'}}>
                                 <div  >
                                     {microphones.map(type => (
-                                        <>
-                                            <button key={type.deviceId} onClick={() => setMicType(type.deviceId)}
-                                                className={`btn-small  ${micType === type.deviceId ? 'active' : ''}`}
+                                        <li key={type.deviceId} style={{ listStyle: 'none' }}>
+                                            <button key={type.deviceId} onClick={() => {setMicID(type.deviceId)
+                                                console.log('Selected mic:', type.label, type.deviceId);
+                                            }}
+                                                className={`btn-small  ${micID === type.deviceId ? 'active' : ''}`}
                                                 style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
                                                 {type.label}
                                             </button>   
                         
-                                        </>
+                                        </li>
                                     ))}
                                 </div>
                             </div>
@@ -301,7 +303,8 @@ export const ControlBar = ({
                                 <button className="btn btn-primary"
                                     onClick={() => {
                                         setActivePanel(null);
-                                        startRecording();
+                                        console.log('Starting recording with micID:', micID);
+                                        startRecording(micID);
                                     }}
                                     disabled={!screenStream && !cameraStream}>
                                     Start Recording
