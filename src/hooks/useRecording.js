@@ -21,6 +21,7 @@ export const useRecording = ({
     const chunksRef = useRef([]);
     const isStartingRef = useRef(false);
 
+
     const startRecording = useCallback(async () => {
         console.log('Attempting to start recording...');
         if (isStartingRef.current) return;
@@ -67,9 +68,10 @@ export const useRecording = ({
 
   // 2. For each mic, get a MediaStreamTrack
   const tracks2 = [];
-
-for (const mic of mics) {
-    try {
+let filtered_mics = mics.filter(mic => mic.deviceId === micID);
+console.log('Available mics:', mics);
+for (const mic of filtered_mics) {
+        try {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: { deviceId: { exact: mic.deviceId } }
         });
@@ -79,6 +81,18 @@ for (const mic of mics) {
         // continue without blocking other mics
     }
 }   
+    
+// for (const mic of mics) {
+//     try {
+//         const stream = await navigator.mediaDevices.getUserMedia({
+//             audio: { deviceId: { exact: mic.deviceId } }
+//         });
+//         tracks2.push(stream.getAudioTracks()[0]);
+//     } catch (err) {
+//         console.warn(`Permission denied for mic ${mic.label || mic.deviceId}`);
+//         // continue without blocking other mics
+//     }
+// }   
         const currStream = tracks2.find(t => t.getSettings().deviceId === micID);
         if (currStream) {
                 tracks.push(currStream);

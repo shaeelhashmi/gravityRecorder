@@ -54,6 +54,17 @@ export const ControlBar = ({
         return false; // permission denied or unavailable
     }
 };
+const testCameraPermission = async (deviceId) => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: deviceId } }
+            });
+            stream.getTracks().forEach(t => t.stop()); // stop immediately
+            return true; // permission granted
+        } catch (err) {
+            return false; // permission denied or unavailable
+        }
+    }
     return (
         <div className="control-bar-container">
             {/* Unified Settings Popover */}
@@ -191,7 +202,7 @@ export const ControlBar = ({
                         onClick={async() => {
                             if (!cameraStream) {
                                 await toggleCamera();
-                                const devices = await navigator.mediaDevices.enumerateDevices();
+                                // const devices = await navigator.mediaDevices.enumerateDevices();
                                 const cameras = devices.filter(d => d.kind === 'videoinput');
                                 setCameras(cameras);
                                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -199,9 +210,10 @@ export const ControlBar = ({
                                 const settings = activeTrack.getSettings();
 
                                 // `deviceId` of the camera actually in use
+                                if (cameraOption==='') {
                                 const defaultCameraId = settings.deviceId;
-
                                 setCameraOption(defaultCameraId);
+                                }
                                 setActivePanel('camera'); 
                             } else {
                                 // If already on, treat as a toggle for the panel
@@ -226,7 +238,14 @@ export const ControlBar = ({
                                 <div  >
                                     {cameras.map(type => (
                                         <>
-                                            <button key={type.deviceId} onClick={() => setCameraOption(type.deviceId)}
+                                            <button key={type.deviceId} onClick={async () =>{
+                                                const hasPermission = await testCameraPermission(type.deviceId);
+                                                if (hasPermission) {
+                                                    setCameraOption(type.deviceId);
+                                                } else {
+                                                    alert('Permission denied for this camera.');
+                                                }
+                                            }}
                                                 className={`btn-small  ${cameraOption === type.deviceId ? 'active' : ''}`}
                                                 style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
                                                 {type.label}
