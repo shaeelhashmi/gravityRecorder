@@ -30,8 +30,8 @@ export const ControlBar = ({
     handleStopAll,
     recordingFormat,
     setRecordingFormat,
-        micID,
-        setMicID
+    micID,
+    setMicID
 }) => {
     const [activePanel, setActivePanel] = React.useState(null); // 'camera', 'bg', 'quality', 'format'
     const supportedFormats = React.useMemo(() => getSupportedFormats(), []);
@@ -40,12 +40,20 @@ export const ControlBar = ({
     const [cameraOption, setCameraOption] = React.useState(''); 
     const [cameras, setCameras] = React.useState([]);
     const [microphones, setMicrophones] = React.useState([]);
-
-
     const togglePanel = (panel) => {
         setActivePanel(activePanel === panel ? null : panel);
     };
-
+ const testMicPermission = async (deviceId) => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { exact: deviceId } }
+        });
+        stream.getTracks().forEach(t => t.stop()); // stop immediately
+        return true; // permission granted
+    } catch (err) {
+        return false; // permission denied or unavailable
+    }
+};
     return (
         <div className="control-bar-container">
             {/* Unified Settings Popover */}
@@ -194,7 +202,7 @@ export const ControlBar = ({
                                 const defaultCameraId = settings.deviceId;
 
                                 setCameraOption(defaultCameraId);
-                                setActivePanel('camera'); // Auto-open settings when turning on
+                                setActivePanel('camera'); 
                             } else {
                                 // If already on, treat as a toggle for the panel
                                 if (activePanel === 'camera') {
@@ -236,16 +244,17 @@ export const ControlBar = ({
                     try{
                     await toggleMic()
                     const devices = await navigator.mediaDevices.enumerateDevices();
-                    const audioInputs = devices.filter(device => device.kind === 'audioinput');
-                    
+                    let audioInputs = devices.filter(device => device.kind === 'audioinput');
                     setMicrophones(audioInputs);
-
                     if(micID === ''){ 
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     const track = stream.getAudioTracks()[0];
                     setMicID(audioInputs.find(d => d.deviceId === track.
-                    getSettings().deviceId).deviceId || 'system');            
+                    getSettings().deviceId).deviceId);  
+                    console.log(audioInputs.find(d => d.deviceId === track.getSettings().deviceId).deviceId); 
+                    console.log('Default mic set to:', micID);       
                     }
+                      console.log('Default mic set to:', micID);  
                     }
                     catch(err){
                         console.error('Error toggling mic:', err);
@@ -264,7 +273,14 @@ export const ControlBar = ({
                                 <div  >
                                     {microphones.map(type => (
                                         <li key={type.deviceId} style={{ listStyle: 'none' }}>
-                                            <button key={type.deviceId} onClick={() => {setMicID(type.deviceId)
+                                            <button key={type.deviceId} onClick={async () => {
+                                                const hasPermission = await testMicPermission(type.deviceId);
+                                                if (!hasPermission) {
+                                                    alert('No permission to access this microphone. Please allow access and try again.');
+                                                    return;
+                                                }
+                                                setMicID(type.deviceId)
+                                                
                                                 console.log('Selected mic:', type.label, type.deviceId);
                                             }}
                                                 className={`btn-small  ${micID === type.deviceId ? 'active' : ''}`}

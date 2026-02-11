@@ -97,6 +97,7 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
             });
 
             setCameraStream(stream);
+            console.log('using device camera stream:', stream);
             if (cameraVideoRef.current) cameraVideoRef.current.srcObject = stream;
 
             // Explicitly play

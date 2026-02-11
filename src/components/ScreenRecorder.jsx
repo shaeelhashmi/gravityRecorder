@@ -371,9 +371,9 @@ const ScreenRecorder = () => {
         }
     }, [isHistoryOpen, directoryHandle, googleToken, auditCloudRegistry, loadCloudMetadata, syncLibrary]);
 
-    const startRecording = useCallback(() => {
+    const startRecording = useCallback((overrideMicID) => {
         if (isRecording || countdown !== null) return;
-
+        setMicID(overrideMicID || micID);
         setCountdown(3);
         countdownTimerRef.current = setInterval(() => {
             setCountdown(prev => {
@@ -449,7 +449,7 @@ const ScreenRecorder = () => {
                 isPaused={isPaused}
                 handleStopAll={handleStopAll}
                 micID={micID}
-                 setMicID={setMicID}
+                setMicID={setMicID}
             />
 
             <div className="mode-info">

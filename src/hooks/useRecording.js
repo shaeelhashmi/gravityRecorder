@@ -44,6 +44,7 @@ export const useRecording = ({
 
             // Case A: Webcam is active OR Background/Frame is active OR Non-Native Scaling (requires canvas)
             const useCanvas = cameraStream || activeBg !== 'none' || (screenScale && screenScale < 1.0) || recordingQuality !== 'native';
+            console.log('Use Canvas:', useCanvas, { cameraStream, activeBg, screenScale, recordingQuality });
 
             if (useCanvas) {
                 if (!canvasRef.current) throw new Error('Canvas not found');
@@ -59,27 +60,33 @@ export const useRecording = ({
 
             // Add Audio track if available
 
-  const devices = await navigator.mediaDevices.enumerateDevices();
+ 
+            if ( audioStream) {
+                 const devices = await navigator.mediaDevices.enumerateDevices();
   const mics = devices.filter(d => d.kind === 'audioinput');
 
   // 2. For each mic, get a MediaStreamTrack
-  const tracks2 = await Promise.all(
-    mics.map(async (mic) => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: { exact: mic.deviceId } }
-      });
-      // Return the first track from this mic
-      return stream.getAudioTracks()[0];
-    })
-     );
+  const tracks2 = [];
+
+for (const mic of mics) {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { exact: mic.deviceId } }
+        });
+        tracks2.push(stream.getAudioTracks()[0]);
+    } catch (err) {
+        console.warn(`Permission denied for mic ${mic.label || mic.deviceId}`);
+        // continue without blocking other mics
+    }
+}   
         const currStream = tracks2.find(t => t.getSettings().deviceId === micID);
-        console.log(micID)
-            if (currStream) {
+        if (currStream) {
                 tracks.push(currStream);
-            }
-            else if(audioStream){
-                tracks.push(...audioStream.getAudioTracks());
-            }
+        } else {
+            console.warn('Selected mic not found, using default audio track');
+            tracks.push(...audioStream.getAudioTracks());
+        }
+    }
 
             if (tracks.length === 0) throw new Error('No tracks available for recording');
 
