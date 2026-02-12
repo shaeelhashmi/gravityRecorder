@@ -77,7 +77,7 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         }
     };
 
-    const toggleCamera = async (width, height) => {
+    const toggleCamera = async (width, height,stream) => {
         if (cameraStream) {
             cameraStream.getTracks().forEach(track => track.stop());
             setCameraStream(null);
@@ -87,13 +87,9 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         }
 
         try {
-            const stream = await mediaManager.getCameraStream(width, height);
-            const track = stream.getVideoTracks()[0];
-            const settings = track.getSettings();
-
             setCameraDimensions({
-                width: settings.width || width || 1280,
-                height: settings.height || height || 720
+                width: width || 1280,
+                height:  height || 720
             });
 
             setCameraStream(stream);
@@ -109,6 +105,14 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
             alert(`Could not acquire camera: ${err.message}`);
         }
     };
+    const changeCamera = (width, height, stream) => {
+        setCameraDimensions({
+            width: width || 1280,
+            height:  height || 720
+        });
+        if (cameraVideoRef.current) cameraVideoRef.current.srcObject = stream;
+        setCameraStream(stream);
+    }
 
     return {
         screenStream,
@@ -119,6 +123,7 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         toggleScreen,
         toggleMic,
         toggleCamera,
-        stopAll
+        stopAll,
+        changeCamera
     };
 };

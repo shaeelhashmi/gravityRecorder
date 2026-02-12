@@ -33,7 +33,7 @@ const ScreenRecorder = () => {
     const {
         screenStream, audioStream, cameraStream,
         screenDimensions, cameraDimensions,
-        toggleScreen, toggleMic, toggleCamera, stopAll: stopStreams
+        toggleScreen, toggleMic, toggleCamera, stopAll: stopStreams,changeCamera
     } = useStreams(screenVideoRef, cameraVideoRef, setStatus);
 
     const [webcamShape, setWebcamShape] = useState('circle');
@@ -450,6 +450,7 @@ const ScreenRecorder = () => {
                 handleStopAll={handleStopAll}
                 micID={micID}
                 setMicID={setMicID}
+                changeCamera={changeCamera}
             />
 
             <div className="mode-info">

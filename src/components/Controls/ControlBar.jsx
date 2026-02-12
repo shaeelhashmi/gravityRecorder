@@ -31,7 +31,8 @@ export const ControlBar = ({
     recordingFormat,
     setRecordingFormat,
     micID,
-    setMicID
+    setMicID,
+    changeCamera
 }) => {
     const [activePanel, setActivePanel] = React.useState(null); // 'camera', 'bg', 'quality', 'format'
     const supportedFormats = React.useMemo(() => getSupportedFormats(), []);
@@ -43,15 +44,47 @@ export const ControlBar = ({
     const togglePanel = (panel) => {
         setActivePanel(activePanel === panel ? null : panel);
     };
+        const getStreamsForAllDevices = async () => {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            console.log(devices)
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            const streamPromises = videoDevices.map(async (device) => {
+                try {
+                    if (device.deviceId===""){
+                        return null; // Skip devices without an ID
+                    }
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            deviceId: { exact: device.deviceId },
+                        }
+                    });
+                    return {
+                    label: device.label,
+                    deviceId: device.deviceId,
+                    stream: stream
+                };
+                } catch (err) {
+                    console.error(`Error accessing camera ${device.label}:`, err);
+                    return null;
+                }
+            });
+            const allResults = await Promise.all(streamPromises);
+            const activeStreams = allResults.filter(result => result !== null);
+            return activeStreams; 
+        } catch (error) {
+            console.error("Failed to enumerate devices:", error);
+        }
+        };
  const testMicPermission = async (deviceId) => {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: { deviceId: { exact: deviceId } }
         });
-        stream.getTracks().forEach(t => t.stop()); // stop immediately
-        return true; // permission granted
+        stream.getTracks().forEach(t => t.stop()); 
+        return true; 
     } catch (err) {
-        return false; // permission denied or unavailable
+        return false; 
     }
 };
 const testCameraPermission = async (deviceId) => {
@@ -201,13 +234,16 @@ const testCameraPermission = async (deviceId) => {
                     <button className={`btn-pill ${cameraStream ? 'active' : ''}`}
                         onClick={async() => {
                             if (!cameraStream) {
-                                await toggleCamera();
-                                // const devices = await navigator.mediaDevices.enumerateDevices();
-                                const cameras = devices.filter(d => d.kind === 'videoinput');
-                                setCameras(cameras);
-                                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                                
+                                try{
+                                const stream = await navigator.mediaDevices.getUserMedia({ video: true });   
                                 const activeTrack = stream.getVideoTracks()[0];
                                 const settings = activeTrack.getSettings();
+                                await toggleCamera(settings.width, settings.height, stream);
+                                console.log('Bhi output?')
+                                const streams= await getStreamsForAllDevices();
+                                console.log('All camera streams:', streams);
+                                setCameras(streams);
 
                                 // `deviceId` of the camera actually in use
                                 if (cameraOption==='') {
@@ -215,6 +251,8 @@ const testCameraPermission = async (deviceId) => {
                                 setCameraOption(defaultCameraId);
                                 }
                                 setActivePanel('camera'); 
+                                } catch(e){console.warn('Error during camera toggle:', e)}
+                                
                             } else {
                                 // If already on, treat as a toggle for the panel
                                 if (activePanel === 'camera') {
@@ -241,6 +279,12 @@ const testCameraPermission = async (deviceId) => {
                                             <button key={type.deviceId} onClick={async () =>{
                                                 const hasPermission = await testCameraPermission(type.deviceId);
                                                 if (hasPermission) {
+                                                    console.log('Camera selected:', type.stream);
+                                                    // const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: type.deviceId } } });
+                                                    // const track = stream.getVideoTracks()[0];
+                                                    // const settings = track.getSettings();
+                                                    console.log(type)
+                                                    changeCamera(type.width,type.height,type.stream)
                                                     setCameraOption(type.deviceId);
                                                 } else {
                                                     alert('Permission denied for this camera.');
