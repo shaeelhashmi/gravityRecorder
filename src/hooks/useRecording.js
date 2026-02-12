@@ -76,12 +76,15 @@ export const useRecording = ({
 
             // Select MIME type: preference first, then fallback to WebM
             let finalMimeType = '';
+            const hasAudio = tracks.some(t => t.kind === 'audio');
+            console.log('Recording has audio:', hasAudio);
+
             if (preferredMimeType && MediaRecorder.isTypeSupported(preferredMimeType)) {
                 finalMimeType = preferredMimeType;
             } else {
                 const fallbacks = [
-                    'video/webm;codecs=vp8,opus',
                     'video/webm;codecs=vp9,opus',
+                    'video/webm;codecs=vp8,opus',
                     'video/webm;codecs=h264,opus',
                     'video/webm',
                     'video/mp4'
@@ -89,12 +92,19 @@ export const useRecording = ({
                 finalMimeType = fallbacks.find(t => MediaRecorder.isTypeSupported(t)) || '';
             }
 
+            // [FIX] If no audio tracks, strip audio codecs to prevent silent failure on some browsers
+            if (!hasAudio && finalMimeType.includes('opus')) {
+                finalMimeType = finalMimeType.replace(',opus', '');
+            } else if (!hasAudio && finalMimeType.includes('aac')) {
+                finalMimeType = finalMimeType.replace(',aac', '');
+            }
+
             console.log('Selected MIME Type:', finalMimeType);
 
             const mediaRecorder = new MediaRecorder(recordingStream, {
                 mimeType: finalMimeType,
                 videoBitsPerSecond: bitrate,
-                audioBitsPerSecond: 128000
+                audioBitsPerSecond: hasAudio ? 128000 : 0
             });
             mediaRecorderRef.current = mediaRecorder;
 
@@ -120,6 +130,11 @@ export const useRecording = ({
                     const blob = new Blob(chunks, { type: finalMimeType });
                     if (onComplete) {
                         onComplete(blob, finalMimeType);
+                    }
+                } else {
+                    console.error('Recording stopped with 0 chunks. This usually indicates an encoding failure.');
+                    if (onComplete) {
+                        onComplete(null, null); // Notify with null to signal empty recording
                     }
                 }
 

@@ -73,8 +73,12 @@ const ScreenRecorder = () => {
     } = useGoogleSync(showToast, directoryHandle);
 
     const handleRecordingComplete = useCallback((blob, mimeType) => {
+        if (!blob) {
+            showToast('Recording Failed', 'No video data was captured. If your mic is disabled, try enabling it.', 'error');
+            return;
+        }
         setPendingRecording({ blob, mimeType });
-    }, []);
+    }, [showToast]);
 
     const {
         isRecording, isPaused, startRecording: startMediaRecording, pauseRecording, resumeRecording, stopRecording, resetRecording,micStream, setMicStream
