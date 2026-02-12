@@ -16,7 +16,7 @@ export const useRecording = ({
     const [isRecording, setIsRecording] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [status, setStatus] = useState('idle');
-    const [micID, setMicID] = useState('');
+    const [micStream, setMicStream] = useState('');
     const mediaRecorderRef = useRef(null);
     const chunksRef = useRef([]);
     const isStartingRef = useRef(false);
@@ -63,43 +63,11 @@ export const useRecording = ({
 
  
             if ( audioStream) {
-                 const devices = await navigator.mediaDevices.enumerateDevices();
-  const mics = devices.filter(d => d.kind === 'audioinput');
+                console.log("Stream:", micStream)
+                 tracks.push(micStream)
 
-  // 2. For each mic, get a MediaStreamTrack
-  const tracks2 = [];
-let filtered_mics = mics.filter(mic => mic.deviceId === micID);
-console.log('Available mics:', mics);
-for (const mic of filtered_mics) {
-        try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: { exact: mic.deviceId } }
-        });
-        tracks2.push(stream.getAudioTracks()[0]);
-    } catch (err) {
-        console.warn(`Permission denied for mic ${mic.label || mic.deviceId}`);
-        // continue without blocking other mics
-    }
-}   
+
     
-// for (const mic of mics) {
-//     try {
-//         const stream = await navigator.mediaDevices.getUserMedia({
-//             audio: { deviceId: { exact: mic.deviceId } }
-//         });
-//         tracks2.push(stream.getAudioTracks()[0]);
-//     } catch (err) {
-//         console.warn(`Permission denied for mic ${mic.label || mic.deviceId}`);
-//         // continue without blocking other mics
-//     }
-// }   
-        const currStream = tracks2.find(t => t.getSettings().deviceId === micID);
-        if (currStream) {
-                tracks.push(currStream);
-        } else {
-            console.warn('Selected mic not found, using default audio track');
-            tracks.push(...audioStream.getAudioTracks());
-        }
     }
 
             if (tracks.length === 0) throw new Error('No tracks available for recording');
@@ -215,7 +183,7 @@ for (const mic of filtered_mics) {
         stopRecording,
         resetRecording,
         mediaRecorderRef,
-        micID,
-        setMicID
+        micStream,
+        setMicStream
     };
 };

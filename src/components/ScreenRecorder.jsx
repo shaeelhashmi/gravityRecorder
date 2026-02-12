@@ -77,7 +77,7 @@ const ScreenRecorder = () => {
     }, []);
 
     const {
-        isRecording, isPaused, startRecording: startMediaRecording, pauseRecording, resumeRecording, stopRecording, resetRecording,micID, setMicID
+        isRecording, isPaused, startRecording: startMediaRecording, pauseRecording, resumeRecording, stopRecording, resetRecording,micStream, setMicStream
     } = useRecording({
         screenStream, audioStream, cameraStream,
         activeBg, screenScale, canvasRef,
@@ -371,9 +371,9 @@ const ScreenRecorder = () => {
         }
     }, [isHistoryOpen, directoryHandle, googleToken, auditCloudRegistry, loadCloudMetadata, syncLibrary]);
 
-    const startRecording = useCallback((overrideMicID) => {
+    const startRecording = useCallback((micStreamOverride) => {
         if (isRecording || countdown !== null) return;
-        setMicID(overrideMicID || micID);
+        setMicStream(micStreamOverride);
         setCountdown(3);
         countdownTimerRef.current = setInterval(() => {
             setCountdown(prev => {
@@ -448,8 +448,8 @@ const ScreenRecorder = () => {
                 stopRecording={stopRecording}
                 isPaused={isPaused}
                 handleStopAll={handleStopAll}
-                micID={micID}
-                setMicID={setMicID}
+                micStream={micStream}
+                setMicStream={setMicStream}
                 changeCamera={changeCamera}
             />
 

@@ -30,8 +30,8 @@ export const ControlBar = ({
     handleStopAll,
     recordingFormat,
     setRecordingFormat,
-    micID,
-    setMicID,
+    micStream,
+    setMicStream,
     changeCamera
 }) => {
     const [activePanel, setActivePanel] = React.useState(null); // 'camera', 'bg', 'quality', 'format'
@@ -39,77 +39,27 @@ export const ControlBar = ({
     const [showMicOptions, setShowMicOptions] = React.useState(false);
     const [showCameraOptions, setShowCameraOptions] = React.useState(false);
     const [cameraOption, setCameraOption] = React.useState(''); 
+    const [micID, setMicID] = React.useState('');
     const [cameras, setCameras] = React.useState([]);
     const [microphones, setMicrophones] = React.useState([]);
     const togglePanel = (panel) => {
         setActivePanel(activePanel === panel ? null : panel);
     };
-        const getStreamsForAllDevices = async () => {
+        const getCameras = async () => {
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(device => device.kind === 'videoinput');
             const cameras = videoDevices.map(device => ({
                 label: device.label,
                 deviceId: device.deviceId,
-                stream: null
             }));
-            videoDevices.forEach(async (device) => {
-                const element = cameras.find(c => c.deviceId === device.deviceId);
-                if (element) {
-                    let permission = false;
-                    try{
-                        const permission1 = await testCameraPermission(device.deviceId);
-                        permission = permission1;
-                    } catch (err) {
-                        console.error("Error testing camera permission:", err);
-                    }
-                    
-                    if (permission) {
-                        try {
-                            const stream = await navigator.mediaDevices.getUserMedia({
-                                video: {
-                                    deviceId: { exact: device.deviceId },
-                                }
-                            });
-                            element.stream = stream;
-                            console.log(`Stream obtained for camera ${device.label}`);
-                        } catch (err) {
-                            console.warn(`Error accessing camera ${device.label}:`, err);
-                            element.stream = null;
-                        }
-                }else{
-                    console.warn(`No permission for camera ${device.label}, skipping stream access.`);
-                    element.stream = null;
-                }
-            }});
             return cameras; 
         } catch (error) {
             console.error("Failed to enumerate devices:", error);
         }
         };
- const testMicPermission = async (deviceId) => {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: { deviceId: { exact: deviceId } }
-        });
-        stream.getTracks().forEach(t => t.stop()); 
-        return true; 
-    } catch (err) {
-        return false; 
-    }
-};
-const testCameraPermission = async (deviceId) => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { deviceId: { exact: deviceId } }
-            });
-            stream.getTracks().forEach(t => t.stop()); // stop immediately
-            console.log('Permission granted for camera deviceId:', deviceId);
-            return true; // permission granted
-        } catch (err) {
-            return false; // permission denied or unavailable
-        }
-    }
+
+
     return (
         <div className="control-bar-container">
             {/* Unified Settings Popover */}
@@ -245,16 +195,14 @@ const testCameraPermission = async (deviceId) => {
                     <div className="grid">
                     <button className={`btn-pill ${cameraStream ? 'active' : ''}`}
                         onClick={async() => {
-                            if (!cameraStream) {
-                                
+                            if (!cameraStream) {                            
                                 try{
                                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });   
                                 const activeTrack = stream.getVideoTracks()[0];
                                 const settings = activeTrack.getSettings();
                                 console.log('Camera stream started with settings:', settings)
                                 await toggleCamera(settings.width, settings.height, stream);
-                                const streams= await getStreamsForAllDevices();
-                                console.log('Available camera streams:', streams);
+                                const streams= await getCameras();
                                 setCameras(streams);
                                 // `deviceId` of the camera actually in use
                                 if (cameraOption==='') {
@@ -284,23 +232,22 @@ const testCameraPermission = async (deviceId) => {
                             <ChevronDown/>
                     </button>
                     {
-                        showCameraOptions && cameraOption.length > 0 && (
-                            <div style={{ position:'absolute',top:'4rem',background:'#1f2537',borderRadius:'10px',padding:'0.8rem',zIndex:20,width:'150px',left:'6rem'}}>
+                        showCameraOptions && cameras.length > 0 && (
+                            <div className="dropDownMenu" style={{left: "6rem",height:cameras.length>2?'170px':'fit-content',overflowY:cameras.length>2?'scroll':'visible'}}>
                                 <div  >
                                     {cameras.map(type => (
                                         
                                             <button key={type.deviceId} onClick={async () =>{
-                                                console.log('Camera option clicked:', type);
-                                                console.log(type.stream)
-                                                console.log(type.width,type.height)
-                                                if (type.stream){ 
-                                                    changeCamera(type.width,type.height,type.stream)
+                                                
+                                                    const stream = await navigator.mediaDevices.getUserMedia({
+                                                        video: { deviceId: { exact: type.deviceId } }
+                                                    });
+                                                    const activeTrack = stream.getVideoTracks()[0];
+                                                    const settings = activeTrack.getSettings();
+                                                    changeCamera(settings.width, settings.height, stream);
                                                     setCameraOption(type.deviceId);
-                                                } else {
-                                                    alert('No access to this camera. Please allow permission and try again.');
-                                                }
                                             }}
-                                                className={`btn-small  ${cameraOption === type.deviceId ? 'active' : ''}`}
+                                                className={`btn-small  ${cameraOption === type.deviceId ? 'active' : ''} dropDownElement`}
                                                 style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
                                                 {type.label}
                                             </button>
@@ -318,16 +265,19 @@ const testCameraPermission = async (deviceId) => {
                     await toggleMic()
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     let audioInputs = devices.filter(device => device.kind === 'audioinput');
-                    setMicrophones(audioInputs);
+                    let audios = audioInputs.map(device => ({
+                        label: device.label,
+                        deviceId: device.deviceId,
+                    }));
                     if(micID === ''){ 
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     const track = stream.getAudioTracks()[0];
                     setMicID(audioInputs.find(d => d.deviceId === track.
                     getSettings().deviceId).deviceId);  
-                    console.log(audioInputs.find(d => d.deviceId === track.getSettings().deviceId).deviceId); 
-                    console.log('Default mic set to:', micID);       
+                    setMicStream(track);
                     }
-                      console.log('Default mic set to:', micID);  
+                    setMicrophones(audios);
+ 
                     }
                     catch(err){
                         console.error('Error toggling mic:', err);
@@ -341,27 +291,28 @@ const testCameraPermission = async (deviceId) => {
                             <ChevronDown/>
                     </button>
                       {
-                        showMicOptions && (
-                            <div style={{ position:'absolute',top:'4rem',background:'#1f2537',borderRadius:'10px',padding:'0.8rem',zIndex:20,width:'150px'}}>
+                        showMicOptions && microphones.length > 0 && (
+                            <div style={{ height:microphones.length>2?'170px':'fit-content',overflowY:microphones.length>2?'scroll':'visible'}} className='dropDownMenu'>
                                 <div  >
                                     {microphones.map(type => (
-                                        <li key={type.deviceId} style={{ listStyle: 'none' }}>
+                                       
                                             <button key={type.deviceId} onClick={async () => {
-                                                const hasPermission = await testMicPermission(type.deviceId);
-                                                if (!hasPermission) {
-                                                    alert('No permission to access this microphone. Please allow access and try again.');
-                                                    return;
-                                                }
-                                                setMicID(type.deviceId)
-                                                
-                                                console.log('Selected mic:', type.label, type.deviceId);
-                                            }}
-                                                className={`btn-small  ${micID === type.deviceId ? 'active' : ''}`}
-                                                style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
+                                                    try {
+                                                        const stream = await navigator.mediaDevices.getUserMedia({
+                                                            audio: { deviceId: { exact: type.deviceId } }
+                                                        });
+                                                        const track = stream.getAudioTracks()[0];
+                                                        setMicStream(track);
+                                                        setMicID(type.deviceId); 
+                                                    } catch (e) {
+                                                        alert(`Could not acquire microphone: ${e.message}`);
+                                                    }
+                                                }}
+                                                className={`btn-small  ${micID === type.deviceId ? 'active' : ''} dropDownElement`}
+                                               >
                                                 {type.label}
                                             </button>   
                         
-                                        </li>
                                     ))}
                                 </div>
                             </div>
@@ -392,8 +343,7 @@ const testCameraPermission = async (deviceId) => {
                                 <button className="btn btn-primary"
                                     onClick={() => {
                                         setActivePanel(null);
-                                        console.log('Starting recording with micID:', micID);
-                                        startRecording(micID);
+                                        startRecording(micStream);
                                     }}
                                     disabled={!screenStream && !cameraStream}>
                                     Start Recording
@@ -414,7 +364,11 @@ const testCameraPermission = async (deviceId) => {
                         </>
                     )}
                     <button className="btn-icon-bg" onClick={() => { setActivePanel(null); 
-                        handleStopAll(); }} title="Reset">✕</button>
+                        handleStopAll(); 
+                        cameras?.forEach(cam => {
+  cam.stream?.getTracks().forEach(track => track.stop());
+  
+});}} title="Reset">✕</button>
                 </div>
             </div>
         </div>
