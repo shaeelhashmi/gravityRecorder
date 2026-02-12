@@ -54,6 +54,14 @@ export const ControlBar = ({
                                             <div className={`shape-preview ${s}`}></div>
                                         </button>
                                     ))}
+                                    <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.4rem' }}></div>
+                                    <button
+                                        onClick={() => { toggleCamera(); setActivePanel(null); }}
+                                        className="btn-icon-danger"
+                                        title="Turn Off Camera"
+                                    >
+                                        ✕
+                                    </button>
                                 </div>
                             </div>
 
@@ -210,7 +218,7 @@ export const ControlBar = ({
                     {(screenStream || cameraStream || activeBg !== 'none') && (
                         <>
                             {!isRecording ? (
-                                <button className="btn btn-primary"
+                                <button className="btn btn-record"
                                     onClick={() => {
                                         setActivePanel(null);
                                         startRecording();

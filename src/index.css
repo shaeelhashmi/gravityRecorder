@@ -181,6 +181,19 @@ body {
   box-shadow: 0 6px 20px rgba(139, 92, 246, 0.23);
 }
 
+.btn-record {
+  background: var(--danger);
+  color: white;
+  box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.39);
+}
+
+.btn-record:hover:not(:disabled) {
+  background: #dc2626;
+  /* Darker red */
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.23);
+}
+
 .btn-danger {
   background: var(--danger);
   color: white;
@@ -406,6 +419,31 @@ body {
 .btn-icon.active {
   background: rgba(139, 92, 246, 0.2);
   border-color: var(--primary);
+}
+
+.btn-icon-danger {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 68, 68, 0.2);
+  background: transparent;
+  color: #ff4a4a;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-icon-danger:hover {
+  background: rgba(255, 68, 68, 0.1);
+  border-color: rgba(255, 68, 68, 0.4);
+  transform: scale(1.1);
+}
+
+.btn-icon-danger:active {
+  transform: scale(0.95);
+  background: rgba(255, 68, 68, 0.2);
 }
 
 .shape-preview {

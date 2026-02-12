@@ -27,7 +27,10 @@ const NavigationHeader = () => {
       alignItems: 'center',
       justifyContent: 'space-between'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}
+        onClick={() => navigate('/')}
+      >
         <div style={{
           width: '40px',
           height: '40px',
@@ -38,9 +41,8 @@ const NavigationHeader = () => {
           justifyContent: 'center',
           fontSize: '1.5rem',
           fontWeight: 'bold',
-          cursor: 'pointer',
           color: 'white'
-        }} onClick={() => navigate('/')}>G</div>
+        }}>G</div>
         <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>Gravity Recorder</h1>
       </div>
       <ThemeToggle />
