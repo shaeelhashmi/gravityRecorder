@@ -201,7 +201,7 @@ export const ControlBar = ({
                                 const activeTrack = stream.getVideoTracks()[0];
                                 const settings = activeTrack.getSettings();
                                 console.log('Camera stream started with settings:', settings)
-                                await toggleCamera(settings.width, settings.height, stream);
+                                await changeCamera(settings.width, settings.height, stream);
                                 const streams= await getCameras();
                                 setCameras(streams);
                                 // `deviceId` of the camera actually in use
@@ -270,6 +270,9 @@ export const ControlBar = ({
                         deviceId: device.deviceId,
                     }));
                     if(micID === ''){ 
+                    if (micStream) {
+                        micStream.getTracks().forEach(track => track.stop());
+                    }
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     const track = stream.getAudioTracks()[0];
                     setMicID(audioInputs.find(d => d.deviceId === track.
