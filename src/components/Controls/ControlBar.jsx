@@ -57,10 +57,10 @@ export const ControlBar = ({
                                     <div style={{ width: '1px', background: 'var(--glass-border)', margin: '0 0.4rem' }}></div>
                                     <button
                                         onClick={() => { toggleCamera(); setActivePanel(null); }}
-                                        className="btn-icon-danger"
+                                        className="btn-danger-minimal"
                                         title="Turn Off Camera"
                                     >
-                                        ✕
+                                        Disable
                                     </button>
                                 </div>
                             </div>

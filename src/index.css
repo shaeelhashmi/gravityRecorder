@@ -421,9 +421,8 @@ body {
   border-color: var(--primary);
 }
 
-.btn-icon-danger {
-  width: 36px;
-  height: 36px;
+.btn-danger-minimal {
+  padding: 0.5rem 0.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -432,17 +431,19 @@ body {
   background: transparent;
   color: #ff4a4a;
   cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.btn-icon-danger:hover {
+.btn-danger-minimal:hover {
   background: rgba(255, 68, 68, 0.1);
   border-color: rgba(255, 68, 68, 0.4);
-  transform: scale(1.1);
+  transform: translateY(-1px);
 }
 
-.btn-icon-danger:active {
-  transform: scale(0.95);
+.btn-danger-minimal:active {
+  transform: translateY(0);
   background: rgba(255, 68, 68, 0.2);
 }
 
