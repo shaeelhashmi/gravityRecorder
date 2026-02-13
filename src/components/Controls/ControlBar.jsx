@@ -241,7 +241,7 @@ export const ControlBar = ({
                     </button>
                     {
                         showCameraOptions && cameras.length > 0 && (
-                            <div className="dropDownMenu" style={{left: "6rem",height:cameras.length>2?'170px':'fit-content',overflowY:cameras.length>2?'scroll':'visible'}}>
+                            <div className="dropDownMenu" style={{left: "4rem",height:cameras.length>2?'170px':'fit-content',overflowY:cameras.length>2?'scroll':'visible'}}>
                                 <div  >
                                     {cameras.map(type => (
                                         
@@ -255,8 +255,7 @@ export const ControlBar = ({
                                                     changeCamera(settings.width, settings.height, stream);
                                                     setCameraOption(type.deviceId);
                                             }}
-                                                className={`btn-small  ${cameraOption === type.deviceId ? 'active' : ''} dropDownElement`}
-                                                style={{ margin: '5px',color:'#94a3b8' ,width:'100%',border:0}}>
+                                                className={`btn-small  ${cameraOption === type.deviceId ? 'active' : ''} dropDownElement`}>
                                                 {type.label}
                                             </button>
                                         
@@ -320,6 +319,7 @@ export const ControlBar = ({
                                                     }
                                                 }}
                                                 className={`btn-small  ${micID === type.deviceId ? 'active' : ''} dropDownElement`}
+
                                                >
                                                 {type.label}
                                             </button>   

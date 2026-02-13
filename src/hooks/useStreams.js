@@ -106,11 +106,12 @@ export const useStreams = (screenVideoRef, cameraVideoRef, setStatus) => {
         }
     };
     const changeCamera = (width, height, stream) => {
-          console.log('Changing camera stream:', stream);
-          console.log('current camera stream:', cameraStream);
           if (cameraStream) {
-            console.log('Changing camera stream:', stream);
             cameraStream.getTracks().forEach(track => track.stop());
+            setCameraStream(null);
+            setCameraDimensions({ width: 0, height: 0 });
+            if (cameraVideoRef.current) cameraVideoRef.current.srcObject = null;
+            
         }
         setCameraDimensions({
             width: width || 1280,
